@@ -27,3 +27,14 @@ jobs:
 
       - name: Build iOS
         run: flutter build ios --release --no-codesign --no-tree-shake-icons
+
+      - name: Package iOS app
+        run: |
+          mkdir -p artifacts
+          zip -r artifacts/Purrse-iOS.app.zip build/ios/iphoneos/Runner.app
+
+      - name: Upload iOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Purrse-iOS
+          path: artifacts/Purrse-iOS.app.zip
