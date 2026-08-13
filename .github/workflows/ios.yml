@@ -26,4 +26,4 @@ jobs:
         run: flutter analyze
 
       - name: Build iOS
-        run: flutter build ios --release --no-codesign
+        run: flutter build ios --release --no-codesign --no-tree-shake-icons
