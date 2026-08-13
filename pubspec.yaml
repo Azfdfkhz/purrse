@@ -19,6 +19,7 @@ dependencies:
   hive: ^2.2.3
   hive_flutter: ^1.1.0 #agar dapat menyimpan data sebelumnya ketika update aplikasi
   google_sign_in: ^7.2.0
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:
