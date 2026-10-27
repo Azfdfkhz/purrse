@@ -24,24 +24,44 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
       appBar: AppBar(
         leading: IconButton(
           onPressed: () => Navigator.of(context).pop(),
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textDark),
+          icon: Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textDark),
         ),
-        title: const Text('Tampilan', style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.w800)),
+        title: Text('Tampilan', style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.w800)),
       ),
       body: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text('Mode tampilan',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.textDark)),
+            SizedBox(height: 10),
+            SegmentedButton<AppThemeMode>(
+              showSelectedIcon: false,
+              segments: [
+                ButtonSegment(value: AppThemeMode.system, label: Text('Sistem'), icon: Icon(Icons.brightness_auto_rounded)),
+                ButtonSegment(value: AppThemeMode.light, label: Text('Terang'), icon: Icon(Icons.light_mode_rounded)),
+                ButtonSegment(value: AppThemeMode.dark, label: Text('Gelap'), icon: Icon(Icons.dark_mode_rounded)),
+              ],
+              selected: {ThemeController.instance.mode},
+              onSelectionChanged: (v) async {
+                await ThemeController.instance.setMode(v.first);
+                if (mounted) setState(() {});
+              },
+            ),
+            SizedBox(height: 22),
+            Text('Warna aksen',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.textDark)),
+            SizedBox(height: 8),
+            Text(
               'Pilih warna utama aplikasi. Warna ini akan menyesuaikan tombol, navbar, kartu utama, indikator, dan elemen UI lainnya.',
               style: TextStyle(color: AppColors.textGrey),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             Expanded(
               child: GridView.builder(
                 itemCount: ThemeController.presets.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 3,
                   mainAxisSpacing: 18,
                   crossAxisSpacing: 18,
@@ -67,14 +87,14 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
                           ),
                           alignment: Alignment.center,
                           child: isSelected
-                              ? const Icon(Icons.check_rounded, color: AppColors.textDark)
+                              ? Icon(Icons.check_rounded, color: AppColors.onPastel)
                               : null,
                         ),
-                        const SizedBox(height: 8),
+                        SizedBox(height: 8),
                         Text(
                           option.name,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 12, color: AppColors.textGrey),
+                          style: TextStyle(fontSize: 12, color: AppColors.textGrey),
                         ),
                       ],
                     ),

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import '../../utils/formatters.dart';
 import '../../services/proof_upload_service.dart';
 import '../../services/storage_service.dart';
 
 import '../../services/backup_service.dart';
+import '../../services/auto_backup_service.dart';
 import '../../services/google_drive_service.dart';
 
 class BackupRestorePage extends StatefulWidget {
@@ -17,10 +19,30 @@ class _BackupRestorePageState
     extends State<BackupRestorePage> {
   bool _loading = false;
   bool _connected = false;
+  DateTime? _lastBackup;
+  DateTime? _safetyAt;
+  bool _auto = false;
+
+  Future<void> _refreshStatus() async {
+    final last = await BackupService.instance.lastBackupAt();
+    final safety = await BackupService.instance.safetyBackupAt();
+    if (!mounted) return;
+    setState(() {
+      _lastBackup = last;
+      _safetyAt = safety;
+    });
+  }
+
+  String _fmtDateTime(DateTime d) =>
+      '${Formatters.date(d)}, ${d.hour.toString().padLeft(2, '0')}.${d.minute.toString().padLeft(2, '0')}';
 
   @override
   void initState() {
     super.initState();
+    _refreshStatus();
+    AutoBackupService.instance.isEnabled().then((v) {
+      if (mounted) setState(() => _auto = v);
+    });
 
     _connected =
         GoogleDriveService.instance.isSignedIn;
@@ -84,10 +106,11 @@ class _BackupRestorePageState
       await BackupService.instance
           .backupToGoogleDrive();
 
+      await _refreshStatus();
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
             'Backup berhasil disimpan ke Google Drive.',
           ),
@@ -109,63 +132,111 @@ class _BackupRestorePageState
   }
 
   Future<void> _restore() async {
+    setState(() => _loading = true);
+    BackupPreview? preview;
+    try {
+      preview = await BackupService.instance.previewGoogleDriveBackup();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _loading = false);
+
+    final p = preview!;
+    final when = p.createdAt == null ? 'tidak diketahui' : _fmtDateTime(p.createdAt!);
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Restore Data'),
-          content: const Text(
-            'Data lokal akan diganti dengan data dari Google Drive. Lanjutkan?',
+      builder: (context) => AlertDialog(
+        title: Text('Pulihkan dari backup?'),
+        content: Text(
+          'Backup ditemukan:\n'
+          '• Dibuat: $when\n'
+          '• ${p.transactionCount} transaksi\n'
+          '• ${p.categoryCount} kategori\n\n'
+          'Data di perangkat ini akan diganti dengan isi backup. '
+          'Salinan data saat ini disimpan otomatis dulu, sehingga kamu bisa '
+          'membatalkan restore dari halaman ini.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Batal'),
           ),
-          actions: [
-            TextButton(
-              onPressed: () =>
-                  Navigator.pop(context, false),
-              child: const Text('Batal'),
-            ),
-            FilledButton(
-              onPressed: () =>
-                  Navigator.pop(context, true),
-              child: const Text('Restore'),
-            ),
-          ],
-        );
-      },
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Pulihkan'),
+          ),
+        ],
+      ),
     );
-
     if (confirm != true) return;
 
     setState(() => _loading = true);
-
     try {
-      if (!GoogleDriveService.instance.isSignedIn) {
-        await GoogleDriveService.instance.signIn();
-      }
-
-      await BackupService.instance
-          .restoreFromGoogleDrive();
-
+      await BackupService.instance.restoreWithSafety(p);
+      await _refreshStatus();
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'Data berhasil di-restore.',
+            'Data dipulihkan: ${p.transactionCount} transaksi, ${p.categoryCount} kategori.',
           ),
         ),
       );
     } catch (e) {
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Restore gagal: $e'),
+          content: Text('Restore gagal, data semula dikembalikan: $e'),
         ),
       );
     } finally {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _undoRestore() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Batalkan restore terakhir?'),
+        content: Text(
+          'Data akan dikembalikan ke kondisi sebelum restore'
+          '${_safetyAt == null ? '' : ' (${_fmtDateTime(_safetyAt!)})'}.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Kembalikan'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _loading = true);
+    try {
+      await BackupService.instance.undoLastRestore();
+      await _refreshStatus();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Data dikembalikan ke kondisi sebelum restore.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal membatalkan restore: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -186,17 +257,17 @@ class _BackupRestorePageState
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Backup & Restore'),
+        title: Text('Backup & Restore'),
         centerTitle: true,
       ),
       body: Stack(
         children: [
           ListView(
-            padding: const EdgeInsets.all(20),
+            padding: EdgeInsets.all(20),
             children: [
               // Google Drive
               Container(
-                padding: const EdgeInsets.all(20),
+                padding: EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color: Theme.of(context)
                       .colorScheme
@@ -227,8 +298,8 @@ class _BackupRestorePageState
                             color: primary,
                           ),
                         ),
-                        const SizedBox(width: 14),
-                        const Expanded(
+                        SizedBox(width: 14),
+                        Expanded(
                           child: Column(
                             crossAxisAlignment:
                             CrossAxisAlignment.start,
@@ -254,7 +325,7 @@ class _BackupRestorePageState
                       ],
                     ),
 
-                    const SizedBox(height: 20),
+                    SizedBox(height: 20),
 
                     if (!_connected)
                       SizedBox(
@@ -263,10 +334,10 @@ class _BackupRestorePageState
                           onPressed: _loading
                               ? null
                               : _connectGoogleDrive,
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.login,
                           ),
-                          label: const Text(
+                          label: Text(
                             'Hubungkan Google Drive',
                           ),
                         ),
@@ -277,7 +348,7 @@ class _BackupRestorePageState
                           Container(
                             width: double.infinity,
                             padding:
-                            const EdgeInsets.all(14),
+                            EdgeInsets.all(14),
                             decoration:
                             BoxDecoration(
                               color: Colors.green
@@ -287,31 +358,35 @@ class _BackupRestorePageState
                                 16,
                               ),
                             ),
-                            child: const Row(
+                            child: Row(
                               children: [
                                 Icon(
                                   Icons.check_circle,
                                   color: Colors.green,
                                 ),
                                 SizedBox(width: 10),
-                                Text(
-                                  'Google Drive terhubung',
-                                  style: TextStyle(
-                                    fontWeight:
-                                    FontWeight.w600,
+                                Expanded(
+                                  child: Text(
+                                    GoogleDriveService.instance.account?.email != null
+                                        ? 'Terhubung: ${GoogleDriveService.instance.account!.email}'
+                                        : 'Google Drive terhubung',
+                                    style: TextStyle(
+                                      fontWeight:
+                                      FontWeight.w600,
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                          const SizedBox(height: 12),
+                          SizedBox(height: 12),
                           SizedBox(
                             width: double.infinity,
                             child: OutlinedButton(
                               onPressed: _loading
                                   ? null
                                   : _disconnect,
-                              child: const Text(
+                              child: Text(
                                 'Putuskan Google Drive',
                               ),
                             ),
@@ -322,11 +397,11 @@ class _BackupRestorePageState
                 ),
               ),
 
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
 
               // Backup
               Container(
-                padding: const EdgeInsets.all(20),
+                padding: EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color: Theme.of(context)
                       .colorScheme
@@ -342,7 +417,7 @@ class _BackupRestorePageState
                   crossAxisAlignment:
                   CrossAxisAlignment.start,
                   children: [
-                    const Row(
+                    Row(
                       children: [
                         Icon(
                           Icons.cloud_upload_outlined,
@@ -358,7 +433,7 @@ class _BackupRestorePageState
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
+                    SizedBox(height: 10),
                     Text(
                       'Simpan transaksi, kategori, dan pengaturan aplikasi ke Google Drive.',
                       style: TextStyle(
@@ -369,16 +444,59 @@ class _BackupRestorePageState
                             ?.withOpacity(.7),
                       ),
                     ),
-                    const SizedBox(height: 18),
+                    SizedBox(height: 10),
+                    Text(
+                      _lastBackup == null
+                          ? 'Backup terakhir: belum ada dari perangkat ini. '
+                            'Terhubung ke Drive belum berarti data sudah dibackup.'
+                          : 'Backup terakhir berhasil: ${_fmtDateTime(_lastBackup!)}',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                    ),
+                    SizedBox(height: 6),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: _auto,
+                      title: Text('Backup otomatis', style: TextStyle(fontWeight: FontWeight.w700)),
+                      subtitle: Text('Backup ke Drive setelah ada perubahan data, dengan jeda singkat dan coba ulang bila gagal.'),
+                      onChanged: (v) async {
+                        setState(() => _auto = v);
+                        await AutoBackupService.instance.setEnabled(v);
+                      },
+                    ),
+                    if (_auto)
+                      AnimatedBuilder(
+                        animation: AutoBackupService.instance,
+                        builder: (context, _) {
+                          final st = AutoBackupService.instance.state;
+                          final text = switch (st) {
+                            AutoBackupState.idle => 'Tidak ada perubahan yang menunggu backup.',
+                            AutoBackupState.waiting => 'Menunggu backup otomatis...',
+                            AutoBackupState.running => 'Sedang membackup...',
+                            AutoBackupState.needsDrive => 'Hubungkan Google Drive agar backup otomatis berjalan.',
+                            AutoBackupState.failed => 'Backup otomatis gagal; akan dicoba lagi.',
+                          };
+                          return Row(
+                            children: [
+                              Expanded(child: Text(text, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
+                              if (st == AutoBackupState.failed || st == AutoBackupState.needsDrive)
+                                TextButton(
+                                  onPressed: () => AutoBackupService.instance.retryNow(),
+                                  child: Text('Coba lagi'),
+                                ),
+                            ],
+                          );
+                        },
+                      ),
+                    SizedBox(height: 18),
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton.icon(
                         onPressed:
                         _loading ? null : _backup,
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.backup,
                         ),
-                        label: const Text(
+                        label: Text(
                           'Backup Sekarang',
                         ),
                       ),
@@ -387,11 +505,11 @@ class _BackupRestorePageState
                 ),
               ),
 
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
 
               // Restore
               Container(
-                padding: const EdgeInsets.all(20),
+                padding: EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color: Theme.of(context)
                       .colorScheme
@@ -407,7 +525,7 @@ class _BackupRestorePageState
                   crossAxisAlignment:
                   CrossAxisAlignment.start,
                   children: [
-                    const Row(
+                    Row(
                       children: [
                         Icon(
                           Icons.cloud_download_outlined,
@@ -423,9 +541,9 @@ class _BackupRestorePageState
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
+                    SizedBox(height: 10),
                     Text(
-                      'Kembalikan data dari backup Google Drive ke aplikasi.',
+                      'Pilih ini di perangkat baru atau setelah instal ulang. Akun Google yang sama hanya membantu menemukan backup; data kembali setelah kamu menjalankan restore.',
                       style: TextStyle(
                         color: Theme.of(context)
                             .textTheme
@@ -434,25 +552,36 @@ class _BackupRestorePageState
                             ?.withOpacity(.7),
                       ),
                     ),
-                    const SizedBox(height: 18),
+                    SizedBox(height: 18),
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
                         onPressed:
                         _loading ? null : _restore,
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.restore,
                         ),
-                        label: const Text(
-                          'Restore Data',
+                        label: Text(
+                          'Pulihkan dari Backup',
                         ),
                       ),
                     ),
+                    if (_safetyAt != null) ...[
+                      SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: TextButton.icon(
+                          onPressed: _loading ? null : _undoRestore,
+                          icon: Icon(Icons.undo_rounded),
+                          label: Text('Batalkan restore terakhir'),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
 
-              const SizedBox(height: 30),
+              SizedBox(height: 30),
 
               Text(
                 'Data utama tetap tersimpan di perangkat. Google Drive hanya digunakan sebagai backup.',
@@ -472,7 +601,7 @@ class _BackupRestorePageState
           if (_loading)
             Container(
               color: Colors.black.withOpacity(.25),
-              child: const Center(
+              child: Center(
                 child: CircularProgressIndicator(),
               ),
             ),

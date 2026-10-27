@@ -6,6 +6,6 @@ class BuktiScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const ComingSoon(title: 'Bukti', icon: Icons.receipt_long_rounded);
+    return ComingSoon(title: 'Bukti', icon: Icons.receipt_long_rounded);
   }
 }

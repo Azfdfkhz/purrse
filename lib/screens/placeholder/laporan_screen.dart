@@ -6,6 +6,6 @@ class LaporanScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const ComingSoon(title: 'Laporan', icon: Icons.bar_chart_rounded);
+    return ComingSoon(title: 'Laporan', icon: Icons.bar_chart_rounded);
   }
 }

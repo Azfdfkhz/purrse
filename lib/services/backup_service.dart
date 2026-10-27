@@ -1,8 +1,25 @@
 import 'dart:convert';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../models/backup_model.dart';
 import 'storage_service.dart';
 import 'google_drive_service.dart';
+
+/// Hasil unduh + validasi backup, ditampilkan ke pengguna SEBELUM restore.
+class BackupPreview {
+  final String json;
+  final int transactionCount;
+  final int categoryCount;
+  final DateTime? createdAt;
+
+  const BackupPreview({
+    required this.json,
+    required this.transactionCount,
+    required this.categoryCount,
+    required this.createdAt,
+  });
+}
 
 class BackupService {
   BackupService._();
@@ -26,7 +43,7 @@ class BackupService {
   // ============================================================
 
   Future<String> createBackup({
-    String appVersion = '1.2.1',
+    String appVersion = '1.2.2',
   }) async {
     final currentUser =
     await _storage.getCurrentUser();
@@ -104,7 +121,7 @@ class BackupService {
       );
 
       if (decoded is! Map<String, dynamic>) {
-        throw const FormatException(
+        throw FormatException(
           'Format backup tidak valid.',
         );
       }
@@ -114,7 +131,7 @@ class BackupService {
 
       // Pastikan backup berasal dari Purrse
       if (backup.app != appName) {
-        throw const FormatException(
+        throw FormatException(
           'File bukan backup Purrse.',
         );
       }
@@ -123,7 +140,7 @@ class BackupService {
       // aplikasi yang lebih baru
       if (backup.backupVersion >
           currentBackupVersion) {
-        throw const FormatException(
+        throw FormatException(
           'Backup dibuat menggunakan versi aplikasi yang lebih baru.',
         );
       }
@@ -240,7 +257,7 @@ class BackupService {
   // ============================================================
 
   Future<void> backupToGoogleDrive({
-    String appVersion = '1.2.1',
+    String appVersion = '1.2.2',
   }) async {
     // Pastikan Google Drive terhubung
     if (!_drive.isSignedIn) {
@@ -257,6 +274,84 @@ class BackupService {
     await _drive.uploadOrUpdateBackup(
       backupJson,
     );
+
+    // Dicatat HANYA setelah upload berhasil (tidak melapor sukses lebih awal).
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _kLastBackup,
+      DateTime.now().toUtc().toIso8601String(),
+    );
+  }
+
+  // ============================================================
+  // STATUS, PREVIEW, DAN RESTORE AMAN
+  // ============================================================
+
+  static const String _kLastBackup = 'last_drive_backup_at';
+  static const String _kSafetyJson = 'safety_backup_json';
+  static const String _kSafetyAt = 'safety_backup_at';
+
+  /// Waktu backup Drive terakhir yang berhasil dari perangkat ini.
+  Future<DateTime?> lastBackupAt() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_kLastBackup);
+    return raw == null ? null : DateTime.tryParse(raw)?.toLocal();
+  }
+
+  /// Unduh dan validasi backup tanpa mengubah data lokal.
+  Future<BackupPreview> previewGoogleDriveBackup() async {
+    if (!_drive.isSignedIn) {
+      await _drive.signIn();
+    }
+    if (!await _drive.hasBackup()) {
+      throw Exception(
+        'Belum ada file backup di Google Drive akun ini. Pastikan akun Google '
+        'yang dipilih sama dengan yang dipakai saat backup, atau buat backup '
+        'dulu dari perangkat lama.',
+      );
+    }
+    final json = await _drive.downloadBackup();
+    final backup = validateBackup(json);
+    return BackupPreview(
+      json: json,
+      transactionCount: backup.transactions.length,
+      categoryCount: backup.categories.length,
+      createdAt: DateTime.tryParse(backup.createdAt)?.toLocal(),
+    );
+  }
+
+  /// Simpan salinan pengaman data lokal saat ini, lalu restore dari [preview].
+  /// Jika restore gagal, data lokal dikembalikan dari salinan pengaman.
+  Future<void> restoreWithSafety(BackupPreview preview) async {
+    final prefs = await SharedPreferences.getInstance();
+    final before = await createBackup();
+    await prefs.setString(_kSafetyJson, before);
+    await prefs.setString(_kSafetyAt, DateTime.now().toUtc().toIso8601String());
+    try {
+      await restoreBackup(preview.json);
+    } catch (e) {
+      await restoreBackup(before);
+      rethrow;
+    }
+  }
+
+  Future<DateTime?> safetyBackupAt() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getString(_kSafetyJson) == null) return null;
+    final raw = prefs.getString(_kSafetyAt);
+    return raw == null ? null : DateTime.tryParse(raw)?.toLocal();
+  }
+
+  /// Batalkan restore terakhir: kembalikan data sebelum restore.
+  Future<void> undoLastRestore() async {
+    final prefs = await SharedPreferences.getInstance();
+    final json = prefs.getString(_kSafetyJson);
+    if (json == null) {
+      throw Exception('Tidak ada salinan pengaman untuk dikembalikan.');
+    }
+    await restoreBackup(json);
+    await prefs.remove(_kSafetyJson);
+    await prefs.remove(_kSafetyAt);
   }
 
   // ============================================================

@@ -20,16 +20,16 @@ class GoogleSignInButton extends StatelessWidget {
       height: 54,
       child: OutlinedButton(
         style: OutlinedButton.styleFrom(
-          backgroundColor: Colors.white,
+          backgroundColor: AppColors.surface,
           foregroundColor: AppColors.textDark,
-          side: const BorderSide(color: AppColors.cardBorder, width: 1.5),
+          side: BorderSide(color: AppColors.cardBorder, width: 1.5),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(30),
           ),
         ),
         onPressed: isLoading ? null : onPressed,
         child: isLoading
-            ? const SizedBox(
+            ? SizedBox(
                 width: 22,
                 height: 22,
                 child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textDark),
@@ -41,11 +41,11 @@ class GoogleSignInButton extends StatelessWidget {
                   Container(
                     width: 24,
                     height: 24,
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       shape: BoxShape.circle,
                     ),
                     alignment: Alignment.center,
-                    child: const Text(
+                    child: Text(
                       'G',
                       style: TextStyle(
                         fontSize: 18,
@@ -54,10 +54,10 @@ class GoogleSignInButton extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: 12),
                   Text(
                     label,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w800,
                       fontSize: 15,
                       color: AppColors.textDark,

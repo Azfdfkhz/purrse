@@ -29,7 +29,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await StorageService.instance.logout();
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const AuthChoiceScreen()),
+      MaterialPageRoute(builder: (_) => AuthChoiceScreen()),
       (route) => false,
     );
   }
@@ -38,23 +38,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     if (_user == null) return Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary));
     return Padding(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Profile', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20)),
-          const SizedBox(height: 24),
+          Text('Profile', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20)),
+          SizedBox(height: 24),
           Center(
             child: Column(
               children: [
-                CircleAvatar(radius: 44, backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.35), child: const Icon(Icons.person, size: 40, color: Colors.white)),
-                const SizedBox(height: 12),
-                Text(_user!.username, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-                Text(_user!.email, style: const TextStyle(color: AppColors.textGrey)),
+                CircleAvatar(radius: 44, backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.35), child: Icon(Icons.person, size: 40, color: Colors.white)),
+                SizedBox(height: 12),
+                Text(_user!.username, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                Text(_user!.email, style: TextStyle(color: AppColors.textGrey)),
               ],
             ),
           ),
-          const Spacer(),
+          Spacer(),
           SizedBox(
             width: double.infinity,
             height: 52,
@@ -65,7 +65,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
               ),
               onPressed: _logout,
-              child: const Text('Keluar', style: TextStyle(fontWeight: FontWeight.w700)),
+              child: Text('Keluar', style: TextStyle(fontWeight: FontWeight.w700)),
             ),
           ),
         ],

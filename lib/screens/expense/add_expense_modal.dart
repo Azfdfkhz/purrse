@@ -15,7 +15,7 @@ class _ThousandsFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(TextEditingValue old, TextEditingValue next) {
     final digits = next.text.replaceAll(RegExp(r'[^0-9]'), '');
-    if (digits.isEmpty) return const TextEditingValue();
+    if (digits.isEmpty) return TextEditingValue();
     final trimmed = digits.replaceFirst(RegExp(r'^0+(?=\d)'), '');
     final buf = StringBuffer();
     for (var i = 0; i < trimmed.length; i++) {
@@ -56,6 +56,9 @@ class _AddExpenseModalState extends State<AddExpenseModal> {
   bool _loading = true;
   bool _saving = false;
   String? _userId;
+  String? _amountError;
+  String? _categoryError;
+  bool _loadFailed = false;
 
   @override
   void initState() {
@@ -74,7 +77,10 @@ class _AddExpenseModalState extends State<AddExpenseModal> {
 
   Future<void> _load() async {
     final user = await StorageService.instance.getCurrentUser();
-    if (user == null) return;
+    if (user == null) {
+      if (mounted) setState(() { _loading = false; _loadFailed = true; });
+      return;
+    }
     final cats = await StorageService.instance.getCategories(user.id);
     setState(() {
       _userId = user.id;
@@ -111,11 +117,11 @@ class _AddExpenseModalState extends State<AddExpenseModal> {
     final result = await showDialog<String>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Kategori baru'),
-        content: TextField(controller: controller, decoration: const InputDecoration(hintText: 'Nama kategori')),
+        title: Text('Kategori baru'),
+        content: TextField(controller: controller, decoration: InputDecoration(hintText: 'Nama kategori')),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
-          TextButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('Tambah')),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('Batal')),
+          TextButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: Text('Tambah')),
         ],
       ),
     );
@@ -139,16 +145,20 @@ class _AddExpenseModalState extends State<AddExpenseModal> {
     // Rupiah tidak memakai desimal: hanya digit yang diterima.
     final digits = _amountController.text.replaceAll(RegExp(r'[^0-9]'), '');
     final amount = digits.isEmpty ? null : double.tryParse(digits);
+    String? amountError;
     if (amount == null || amount <= 0) {
-      _toast('Jumlah harus lebih dari 0');
-      return;
+      amountError = 'Jumlah harus lebih dari 0';
+    } else if (amount > _maxAmount) {
+      amountError = 'Jumlah terlalu besar';
     }
-    if (amount > _maxAmount) {
-      _toast('Jumlah terlalu besar');
-      return;
-    }
-    if (_selectedCategoryId == null || _userId == null) {
-      _toast('Pilih kategori terlebih dahulu');
+    final categoryError = (_selectedCategoryId == null || _userId == null)
+        ? 'Pilih satu kategori'
+        : null;
+    if (amountError != null || categoryError != null) {
+      setState(() {
+        _amountError = amountError;
+        _categoryError = categoryError;
+      });
       return;
     }
     setState(() => _saving = true);
@@ -158,10 +168,10 @@ class _AddExpenseModalState extends State<AddExpenseModal> {
       final String savedId;
       if (old == null) {
         final expense = ExpenseModel(
-          id: const Uuid().v4(),
+          id: Uuid().v4(),
           userId: _userId!,
           categoryId: _selectedCategoryId!,
-          amount: amount,
+          amount: amount!,
           date: _date,
           description: _descController.text.trim(),
           proofPath: _proofPath,
@@ -172,7 +182,7 @@ class _AddExpenseModalState extends State<AddExpenseModal> {
         await StorageService.instance.updateExpense(
           old.copyWith(
             categoryId: _selectedCategoryId,
-            amount: amount,
+            amount: amount!,
             date: _date,
             description: _descController.text.trim(),
             proofPath: _proofPath,
@@ -197,214 +207,307 @@ class _AddExpenseModalState extends State<AddExpenseModal> {
     }
   }
 
+  Widget _label(String text) => Padding(
+        padding: EdgeInsets.only(bottom: 8),
+        child: Text(text,
+            style: TextStyle(
+                fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.textDark)),
+      );
+
+  Widget _errorText(String? msg) => msg == null
+      ? SizedBox.shrink()
+      : Padding(
+          padding: EdgeInsets.only(top: 6, left: 4),
+          child: Row(
+            children: [
+              Icon(Icons.error_outline_rounded, size: 16, color: AppColors.danger),
+              SizedBox(width: 6),
+              Expanded(
+                child: Text(msg,
+                    style: TextStyle(
+                        color: AppColors.danger, fontSize: 13, fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+        );
+
   @override
   Widget build(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    // Tinggi sheet mengikuti ruang yang tersisa di atas keyboard.
+    final maxSheet = (mq.size.height - mq.viewInsets.bottom) * 0.9;
+
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(bottom: mq.viewInsets.bottom),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             child: Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
                 onPressed: () => Navigator.pop(context, false),
                 style: TextButton.styleFrom(
                   backgroundColor: AppColors.ink,
-                  foregroundColor: Colors.white,
-                  shape: const StadiumBorder(),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  foregroundColor: AppColors.onInk,
+                  shape: StadiumBorder(),
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 ),
-                icon: const Icon(Icons.arrow_back_rounded, size: 18),
-                label: const Text('Kembali', style: TextStyle(fontWeight: FontWeight.w700)),
+                icon: Icon(Icons.arrow_back_rounded, size: 18),
+                label: Text('Kembali', style: TextStyle(fontWeight: FontWeight.w700)),
               ),
             ),
           ),
           Container(
             width: double.infinity,
-            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.72),
-            padding: const EdgeInsets.fromLTRB(22, 24, 22, 24),
-            decoration: const BoxDecoration(
-              color: Colors.white,
+            constraints: BoxConstraints(maxHeight: maxSheet),
+            padding: EdgeInsets.fromLTRB(22, 22, 22, 16),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
               borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
               border: Border(top: BorderSide(color: AppColors.ink, width: 2)),
             ),
             child: _loading
-                ? Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary))
-                : SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(_isEdit ? 'Edit Pengeluaran' : 'Jumlah Pengeluaran:', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _amountController,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [_ThousandsFormatter()],
-                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-                          decoration: InputDecoration(
-                            prefixText: 'Rp ',
-                            hintText: '0',
-                            filled: true,
-                            fillColor: AppColors.background,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(color: AppColors.ink, width: 1.5),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(color: AppColors.ink, width: 1.5),
-                            ),
+                ? Padding(
+                    padding: EdgeInsets.all(40),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                : _loadFailed
+                    ? Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Text(
+                          'Data akun tidak dapat dimuat. Tutup lalu coba lagi.',
+                          textAlign: TextAlign.center,
+                        ),
+                      )
+                    : Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _isEdit ? 'Edit Pengeluaran' : 'Tambah Pengeluaran',
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 22),
                           ),
-                        ),
-                        const SizedBox(height: 18),
-                        const Text('Kategori', style: TextStyle(fontWeight: FontWeight.w700)),
-                        const SizedBox(height: 10),
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: [
-                            ..._categories.map((c) {
-                              final selected = c.id == _selectedCategoryId;
-                              return GestureDetector(
-                                onTap: () => setState(() => _selectedCategoryId = c.id),
-                                child: Column(
-                                  children: [
-                                    AnimatedContainer(
-                                      duration: motion(context, 180),
-                                      width: 52,
-                                      height: 52,
-                                      decoration: BoxDecoration(
-                                        color: c.color,
-                                        borderRadius: BorderRadius.circular(18),
-                                        border: Border.all(
-                                          color: AppColors.ink,
-                                          width: selected ? 2.5 : 1,
-                                        ),
-                                      ),
-                                      child: Icon(c.icon, color: AppColors.ink, size: 22),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(c.name, style: const TextStyle(fontSize: 12)),
-                                  ],
-                                ),
-                              );
-                            }),
-                            GestureDetector(
-                              onTap: _addCategoryDialog,
-                              child: Container(
-                                width: 52,
-                                height: 52,
-                                decoration: BoxDecoration(
-                                  color: AppColors.background,
-                                  borderRadius: BorderRadius.circular(18),
-                                  border: Border.all(color: AppColors.cardBorder),
-                                ),
-                                child: const Icon(Icons.add_rounded, color: AppColors.textGrey),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
+                          SizedBox(height: 14),
+                          Flexible(
+                            child: SingleChildScrollView(
+                              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text('Tanggal:', style: TextStyle(fontWeight: FontWeight.w700)),
-                                  const SizedBox(height: 8),
+                                  _label('Jumlah'),
+                                  TextField(
+                                    controller: _amountController,
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [_ThousandsFormatter()],
+                                    onChanged: (_) {
+                                      if (_amountError != null) setState(() => _amountError = null);
+                                    },
+                                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+                                    decoration: InputDecoration(
+                                      prefixText: 'Rp ',
+                                      hintText: '0',
+                                      filled: true,
+                                      fillColor: AppColors.surfaceVariant,
+                                      contentPadding:
+                                          EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                        borderSide: BorderSide(
+                                          color: _amountError == null ? AppColors.ink : AppColors.danger,
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                        borderSide: BorderSide(
+                                          color: _amountError == null ? AppColors.ink : AppColors.danger,
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  _errorText(_amountError),
+                                  SizedBox(height: 20),
+                                  _label('Kategori'),
+                                  Wrap(
+                                    spacing: 12,
+                                    runSpacing: 12,
+                                    children: [
+                                      ..._categories.map((c) {
+                                        final selected = c.id == _selectedCategoryId;
+                                        return Semantics(
+                                          button: true,
+                                          selected: selected,
+                                          label: 'Kategori ${c.name}',
+                                          child: GestureDetector(
+                                            behavior: HitTestBehavior.opaque,
+                                            onTap: () => setState(() {
+                                              _selectedCategoryId = c.id;
+                                              _categoryError = null;
+                                            }),
+                                            child: SizedBox(
+                                              width: 64,
+                                              child: Column(
+                                                children: [
+                                                  AnimatedContainer(
+                                                    duration: motion(context, 180),
+                                                    width: 52,
+                                                    height: 52,
+                                                    decoration: BoxDecoration(
+                                                      color: c.color,
+                                                      borderRadius: BorderRadius.circular(18),
+                                                      border: Border.all(
+                                                        color: AppColors.ink,
+                                                        width: selected ? 3 : 1,
+                                                      ),
+                                                    ),
+                                                    child: Icon(
+                                                      selected ? Icons.check_rounded : c.icon,
+                                                      color: AppColors.ink,
+                                                      size: 22,
+                                                    ),
+                                                  ),
+                                                  SizedBox(height: 4),
+                                                  Text(
+                                                    c.name,
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                    textAlign: TextAlign.center,
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      fontWeight:
+                                                          selected ? FontWeight.w800 : FontWeight.w500,
+                                                      color: AppColors.textDark,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }),
+                                      Semantics(
+                                        button: true,
+                                        label: 'Tambah kategori',
+                                        child: GestureDetector(
+                                          onTap: _addCategoryDialog,
+                                          child: Container(
+                                            width: 52,
+                                            height: 52,
+                                            decoration: BoxDecoration(
+                                              color: AppColors.surfaceVariant,
+                                              borderRadius: BorderRadius.circular(18),
+                                              border: Border.all(color: AppColors.border),
+                                            ),
+                                            child: Icon(Icons.add_rounded, color: AppColors.textGrey),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  _errorText(_categoryError),
+                                  SizedBox(height: 20),
+                                  _label('Tanggal'),
                                   InkWell(
                                     onTap: _pickDate,
+                                    borderRadius: BorderRadius.circular(14),
                                     child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                                      constraints: BoxConstraints(minHeight: 52),
+                                      padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                                       decoration: BoxDecoration(
                                         borderRadius: BorderRadius.circular(14),
-                                        border: Border.all(color: AppColors.cardBorder),
+                                        border: Border.all(color: AppColors.border),
                                       ),
                                       child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
-                                          Text(Formatters.date(_date), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                                          const Icon(Icons.calendar_today_rounded, size: 16, color: AppColors.textGrey),
+                                          Icon(Icons.calendar_today_rounded,
+                                              size: 18, color: AppColors.textGrey),
+                                          SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text(
+                                              Formatters.date(_date),
+                                              style: TextStyle(
+                                                  fontSize: 15, fontWeight: FontWeight.w700),
+                                            ),
+                                          ),
+                                          Text('Ubah',
+                                              style: TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: AppColors.textGrey)),
                                         ],
                                       ),
                                     ),
                                   ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text('Deskripsi:', style: TextStyle(fontWeight: FontWeight.w700)),
-                                  const SizedBox(height: 8),
+                                  SizedBox(height: 20),
+                                  _label('Deskripsi (opsional)'),
                                   TextField(
                                     controller: _descController,
+                                    textCapitalization: TextCapitalization.sentences,
                                     decoration: InputDecoration(
-                                      hintText: 'Catatan',
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                                      hintText: 'Contoh: makan siang',
+                                      contentPadding:
+                                          EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                                       border: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(14),
-                                        borderSide: const BorderSide(color: AppColors.cardBorder),
+                                        borderSide: BorderSide(color: AppColors.border),
                                       ),
                                     ),
                                   ),
+                                  SizedBox(height: 20),
+                                  _label('Bukti (opsional)'),
+                                  InkWell(
+                                    onTap: _pickImage,
+                                    borderRadius: BorderRadius.circular(14),
+                                    child: Container(
+                                      constraints: BoxConstraints(minHeight: 52),
+                                      width: double.infinity,
+                                      padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(color: AppColors.border),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            _proofPath == null
+                                                ? Icons.add_photo_alternate_outlined
+                                                : Icons.check_circle_rounded,
+                                            size: 20,
+                                            color: _proofPath == null
+                                                ? AppColors.textGrey
+                                                : AppColors.success,
+                                          ),
+                                          SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text(
+                                              _proofPath == null
+                                                  ? 'Unggah foto bukti'
+                                                  : 'Foto dipilih (ketuk untuk ganti)',
+                                              style: TextStyle(
+                                                  fontSize: 14, color: AppColors.textDark),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(height: 12),
                                 ],
                               ),
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        const Text('Bukti (opsional)', style: TextStyle(fontWeight: FontWeight.w700)),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: InkWell(
-                                onTap: _pickImage,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(color: AppColors.cardBorder),
-                                  ),
-                                  child: Text(
-                                    _proofPath == null ? 'upload foto' : 'Foto dipilih (ketuk untuk ganti)',
-                                    style: const TextStyle(fontSize: 14, color: AppColors.textGrey),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.ink,
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                                minimumSize: const Size(110, 54),
-                                padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 16),
-                                shape: const StadiumBorder(),
-                              ),
-                              onPressed: _saving ? null : _save,
-                              child: _saving
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                    )
-                                  : Text(_isEdit ? 'Perbarui' : 'Simpan', style: const TextStyle(fontWeight: FontWeight.w700)),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
+                          ),
+                          SizedBox(height: 8),
+                          // Tombol simpan di luar area scroll: tidak tertutup keyboard.
+                          InkButton(
+                            label: _isEdit ? 'Perbarui' : 'Simpan',
+                            loading: _saving,
+                            onPressed: _saving ? null : _save,
+                          ),
+                        ],
+                      ),
           ),
         ],
       ),

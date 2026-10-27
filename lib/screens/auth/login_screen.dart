@@ -36,7 +36,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const NavbarShell()),
+      MaterialPageRoute(builder: (_) => NavbarShell()),
       (route) => false,
     );
   }
@@ -47,26 +47,26 @@ class _LoginScreenState extends State<LoginScreen> {
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+          padding: EdgeInsets.symmetric(horizontal: 28, vertical: 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               IconButton(
                 onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                icon: Icon(Icons.arrow_back_ios_new_rounded),
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: 8),
               Text('Selamat Datang', style: Theme.of(context).textTheme.headlineMedium),
-              const SizedBox(height: 6),
-              const Text('Masuk untuk melanjutkan', style: TextStyle(color: AppColors.textGrey)),
-              const SizedBox(height: 28),
+              SizedBox(height: 6),
+              Text('Masuk untuk melanjutkan', style: TextStyle(color: AppColors.textGrey)),
+              SizedBox(height: 28),
               AppTextField(
                 label: 'Email',
                 controller: _email,
                 hint: 'contoh@email.com',
                 keyboardType: TextInputType.emailAddress,
               ),
-              const SizedBox(height: 18),
+              SizedBox(height: 18),
               AppTextField(
                 label: 'Password',
                 controller: _password,
@@ -78,10 +78,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               if (_error != null) ...[
-                const SizedBox(height: 12),
-                Text(_error!, style: const TextStyle(color: Colors.red)),
+                SizedBox(height: 12),
+                Text(_error!, style: TextStyle(color: Colors.red)),
               ],
-              const SizedBox(height: 28),
+              SizedBox(height: 28),
               SizedBox(
                 width: double.infinity,
                 height: 56,
@@ -94,22 +94,22 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   onPressed: _loading ? null : _submit,
                   child: _loading
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 22,
                           height: 22,
                           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         )
-                      : const Text('Masuk', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                      : Text('Masuk', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
                 ),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text('Belum memiliki akun? '),
+                  Text('Belum memiliki akun? '),
                   GestureDetector(
                     onTap: () => Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(builder: (_) => const RegisterScreen()),
+                      MaterialPageRoute(builder: (_) => RegisterScreen()),
                     ),
                     child: Text('Daftar', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700)),
                   ),

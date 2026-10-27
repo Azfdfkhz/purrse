@@ -3,7 +3,7 @@ import '../../models/category_model.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
 
-const List<IconData> _iconChoices = [
+List<IconData> _iconChoices = [
   Icons.restaurant_rounded,
   Icons.movie_filter_rounded,
   Icons.moped_rounded,
@@ -56,8 +56,8 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
     final result = await showModalBottomSheet<_CategoryDraft>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+      backgroundColor: AppColors.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
       builder: (_) => _CategoryEditorSheet(existing: existing),
     );
     if (result == null) return;
@@ -78,11 +78,11 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Hapus kategori?'),
+        title: Text('Hapus kategori?'),
         content: Text('Kategori "${category.name}" akan dihapus. Pengeluaran lama tetap tersimpan.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Hapus', style: TextStyle(color: Colors.red))),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text('Batal')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: Text('Hapus', style: TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -99,27 +99,27 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
       appBar: AppBar(
         leading: IconButton(
           onPressed: () => Navigator.of(context).pop(),
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textDark),
+          icon: Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textDark),
         ),
-        title: const Text('Kategori Pengeluaran', style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.w800)),
+        title: Text('Kategori Pengeluaran', style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.w800)),
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: AppColors.ink,
         onPressed: () => _openEditor(),
-        child: const Icon(Icons.add_rounded, color: Colors.white),
+        child: Icon(Icons.add_rounded, color: Colors.white),
       ),
       body: _loading
           ? Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary))
           : ListView.separated(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 90),
+              padding: EdgeInsets.fromLTRB(20, 8, 20, 90),
               itemCount: _categories.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              separatorBuilder: (_, __) => SizedBox(height: 12),
               itemBuilder: (context, i) {
                 final cat = _categories[i];
                 return Container(
-                  padding: const EdgeInsets.all(14),
+                  padding: EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppColors.surface,
                     borderRadius: BorderRadius.circular(18),
                     border: Border.all(color: AppColors.cardBorder),
                   ),
@@ -129,19 +129,19 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                         width: 44,
                         height: 44,
                         decoration: BoxDecoration(color: cat.color, shape: BoxShape.circle),
-                        child: Icon(cat.icon, color: Colors.white, size: 20),
+                        child: Icon(cat.icon, color: AppColors.onColor(cat.color), size: 20),
                       ),
-                      const SizedBox(width: 12),
+                      SizedBox(width: 12),
                       Expanded(
-                        child: Text(cat.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                        child: Text(cat.name, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
                       ),
                       IconButton(
                         onPressed: () => _openEditor(existing: cat),
-                        icon: const Icon(Icons.edit_rounded, color: AppColors.textGrey, size: 20),
+                        icon: Icon(Icons.edit_rounded, color: AppColors.textGrey, size: 20),
                       ),
                       IconButton(
                         onPressed: () => _delete(cat),
-                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
+                        icon: Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
                       ),
                     ],
                   ),
@@ -188,23 +188,23 @@ class _CategoryEditorSheetState extends State<_CategoryEditorSheet> {
           children: [
             Text(
               widget.existing == null ? 'Kategori baru' : 'Edit kategori',
-              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             TextField(
               controller: _nameController,
               decoration: InputDecoration(
                 hintText: 'Nama kategori',
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: AppColors.cardBorder),
+                  borderSide: BorderSide(color: AppColors.cardBorder),
                 ),
               ),
             ),
-            const SizedBox(height: 18),
-            const Text('Pilih ikon', style: TextStyle(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 10),
+            SizedBox(height: 18),
+            Text('Pilih ikon', style: TextStyle(fontWeight: FontWeight.w700)),
+            SizedBox(height: 10),
             Wrap(
               spacing: 12,
               runSpacing: 12,
@@ -220,14 +220,14 @@ class _CategoryEditorSheetState extends State<_CategoryEditorSheet> {
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: selected ? _color : AppColors.cardBorder),
                     ),
-                    child: Icon(icon, color: selected ? Colors.white : AppColors.textGrey, size: 20),
+                    child: Icon(icon, color: selected ? AppColors.onColor(_color) : AppColors.textGrey, size: 20),
                   ),
                 );
               }).toList(),
             ),
-            const SizedBox(height: 18),
-            const Text('Pilih warna', style: TextStyle(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 10),
+            SizedBox(height: 18),
+            Text('Pilih warna', style: TextStyle(fontWeight: FontWeight.w700)),
+            SizedBox(height: 10),
             Wrap(
               spacing: 12,
               runSpacing: 12,
@@ -247,7 +247,7 @@ class _CategoryEditorSheetState extends State<_CategoryEditorSheet> {
                 );
               }).toList(),
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               height: 52,
@@ -263,7 +263,7 @@ class _CategoryEditorSheetState extends State<_CategoryEditorSheet> {
                   if (name.isEmpty) return;
                   Navigator.pop(context, _CategoryDraft(name, _color, _icon));
                 },
-                child: const Text('Simpan', style: TextStyle(fontWeight: FontWeight.w700)),
+                child: Text('Simpan', style: TextStyle(fontWeight: FontWeight.w700)),
               ),
             ),
           ],

@@ -53,25 +53,25 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+          padding: EdgeInsets.symmetric(horizontal: 28, vertical: 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               IconButton(
                 onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                icon: Icon(Icons.arrow_back_ios_new_rounded),
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: 8),
               Text(
                 'Lupa Password',
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
-              const SizedBox(height: 6),
-              const Text(
+              SizedBox(height: 6),
+              Text(
                 'Masukkan email yang terdaftar untuk menerima instruksi reset password.',
                 style: TextStyle(color: AppColors.textGrey, fontSize: 14),
               ),
-              const SizedBox(height: 28),
+              SizedBox(height: 28),
               AppTextField(
                 label: 'Email',
                 controller: _emailController,
@@ -79,9 +79,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 keyboardType: TextInputType.emailAddress,
               ),
               if (_message != null) ...[
-                const SizedBox(height: 14),
+                SizedBox(height: 14),
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: _isError ? Colors.red.withOpacity(0.1) : Colors.green.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
@@ -95,7 +95,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         _isError ? Icons.error_outline_rounded : Icons.check_circle_outline_rounded,
                         color: _isError ? Colors.red : Colors.green,
                       ),
-                      const SizedBox(width: 10),
+                      SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           _message!,
@@ -109,7 +109,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   ),
                 ),
               ],
-              const SizedBox(height: 28),
+              SizedBox(height: 28),
               SizedBox(
                 width: double.infinity,
                 height: 56,
@@ -124,7 +124,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   ),
                   onPressed: _loading ? null : _submit,
                   child: _loading
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 22,
                           height: 22,
                           child: CircularProgressIndicator(
@@ -132,7 +132,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                             color: Colors.white,
                           ),
                         )
-                      : const Text(
+                      : Text(
                           'Kirim Link Reset Password',
                           style: TextStyle(
                             fontWeight: FontWeight.w800,

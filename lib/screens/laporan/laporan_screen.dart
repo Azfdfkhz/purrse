@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../expense/add_expense_modal.dart';
+import '../profile/notification_settings_screen.dart';
 import '../../widgets/ui_kit.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../models/category_model.dart';
@@ -102,6 +103,22 @@ class LaporanScreenState extends State<LaporanScreen> {
     });
   }
 
+  /// Pintasan: kembali ke bulan/hari ini tanpa menebak.
+  void _goToday() {
+    final now = DateTime.now();
+    setState(() {
+      _month = now.month;
+      _year = now.year;
+      _selectedDay = ExpenseModel.dateOnly(now);
+      _pickedDay = null;
+    });
+  }
+
+  bool get _isCurrentPeriod {
+    final now = DateTime.now();
+    return _month == now.month && _year == now.year;
+  }
+
   _DisplayType get _currentDisplay =>
       _mode == _ReportMode.hari ? _hariDisplay : _bulanDisplay;
 
@@ -118,8 +135,8 @@ class LaporanScreenState extends State<LaporanScreen> {
   Future<void> _pickDisplayType() async {
     final selected = await showModalBottomSheet<_DisplayType>(
       context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
+      backgroundColor: AppColors.surface,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (_) => SafeArea(
@@ -127,12 +144,12 @@ class LaporanScreenState extends State<LaporanScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              title: const Text('Calendar'),
+              title: Text('Calendar'),
               subtitle: Text(
                 _mode == _ReportMode.hari
                     ? 'Lihat kalender tanggal'
                     : 'Lihat grafik per bulan',
-                style: const TextStyle(fontSize: 12, color: AppColors.textGrey),
+                style: TextStyle(fontSize: 12, color: AppColors.textGrey),
               ),
               trailing: _currentDisplay == _DisplayType.calendar
                   ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary)
@@ -140,12 +157,12 @@ class LaporanScreenState extends State<LaporanScreen> {
               onTap: () => Navigator.pop(context, _DisplayType.calendar),
             ),
             ListTile(
-              title: const Text('Data'),
+              title: Text('Data'),
               subtitle: Text(
                 _mode == _ReportMode.hari
                     ? 'Lihat daftar tanggal & totalnya'
                     : 'Lihat daftar bulan & totalnya',
-                style: const TextStyle(fontSize: 12, color: AppColors.textGrey),
+                style: TextStyle(fontSize: 12, color: AppColors.textGrey),
               ),
               trailing: _currentDisplay == _DisplayType.data
                   ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary)
@@ -165,8 +182,8 @@ class LaporanScreenState extends State<LaporanScreen> {
   Future<void> _pickMode() async {
     final selected = await showModalBottomSheet<_ReportMode>(
       context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
+      backgroundColor: AppColors.surface,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (_) => SafeArea(
@@ -174,14 +191,14 @@ class LaporanScreenState extends State<LaporanScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              title: const Text('Hari'),
+              title: Text('Hari'),
               trailing: _mode == _ReportMode.hari
                   ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary)
                   : null,
               onTap: () => Navigator.pop(context, _ReportMode.hari),
             ),
             ListTile(
-              title: const Text('Bulan'),
+              title: Text('Bulan'),
               trailing: _mode == _ReportMode.bulan
                   ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary)
                   : null,
@@ -221,7 +238,7 @@ class LaporanScreenState extends State<LaporanScreen> {
         final themeColor = ThemeController.instance.accentColor;
 
         return SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          padding: EdgeInsets.fromLTRB(20, 12, 20, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -233,14 +250,20 @@ class LaporanScreenState extends State<LaporanScreen> {
                     color: themeColor,
                     onTap: _pickMode,
                   ),
-                  const Icon(
-                    Icons.notifications_none_rounded,
-                    color: AppColors.textDark,
-                    size: 26,
+                  IconButton(
+                    tooltip: 'Pengaturan notifikasi',
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => NotificationSettingsScreen()),
+                    ),
+                    icon: Icon(
+                      Icons.notifications_none_rounded,
+                      color: AppColors.textDark,
+                      size: 26,
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -252,35 +275,49 @@ class LaporanScreenState extends State<LaporanScreen> {
                   Row(
                     children: [
                       IconButton(
+                        tooltip: 'Bulan sebelumnya',
                         onPressed: () => _shiftMonth(-1),
-                        icon: const Icon(Icons.chevron_left_rounded, color: AppColors.textDark),
+                        icon: Icon(Icons.chevron_left_rounded, color: AppColors.textDark),
                       ),
                       Text(
-                        Formatters.monthNames[_month - 1],
-                        style: const TextStyle(
+                        '${Formatters.monthNames[_month - 1]} $_year',
+                        style: TextStyle(
                           fontWeight: FontWeight.w800,
                           fontSize: 16,
                           color: AppColors.textDark,
                         ),
                       ),
                       IconButton(
+                        tooltip: 'Bulan berikutnya',
                         onPressed: () => _shiftMonth(1),
-                        icon: const Icon(Icons.chevron_right_rounded, color: AppColors.textDark),
+                        icon: Icon(Icons.chevron_right_rounded, color: AppColors.textDark),
                       ),
                     ],
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
+              if (!_isCurrentPeriod || (_mode == _ReportMode.hari && _pickedDay != null))
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: _goToday,
+                    icon: Icon(Icons.today_rounded, size: 18),
+                    label: Text(
+                      _mode == _ReportMode.hari ? 'Hari ini' : 'Bulan ini',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+              SizedBox(height: 14),
               if (_mode == _ReportMode.hari) ...[
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton.icon(
                     onPressed: _addForSelectedDay,
-                    icon: const Icon(Icons.add_circle_outline_rounded, size: 20),
+                    icon: Icon(Icons.add_circle_outline_rounded, size: 20),
                     label: Text(
                       'Tambah di ${Formatters.date(_selectedDay)}',
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
                     ),
                   ),
                 ),
@@ -338,7 +375,7 @@ class _Pill extends StatelessWidget {
     return Pressable(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         decoration: BoxDecoration(
           color: color,
           borderRadius: BorderRadius.circular(24),
@@ -349,16 +386,16 @@ class _Pill extends StatelessWidget {
           children: [
             Text(
               label,
-              style: const TextStyle(
-                color: AppColors.textDark,
+              style: TextStyle(
+                color: AppColors.onPastel,
                 fontWeight: FontWeight.w800,
                 fontSize: 15,
               ),
             ),
-            const SizedBox(width: 6),
-            const Icon(
+            SizedBox(width: 6),
+            Icon(
               Icons.keyboard_arrow_down_rounded,
-              color: AppColors.textDark,
+              color: AppColors.onPastel,
               size: 20,
             ),
           ],
@@ -407,14 +444,14 @@ class _DayView extends StatelessWidget {
           _buildCalendarGrid(context, daysInMonth, expenseDays)
         else
           _buildDataList(context, expenseDays),
-        const SizedBox(height: 22),
+        SizedBox(height: 22),
         Text(
           'Berikut pengeluaran pada tanggal ${Formatters.date(selectedDay)}:',
-          style: const TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600),
+          style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: 12),
         if (dayExpenses.isEmpty)
-          const Padding(
+          Padding(
             padding: EdgeInsets.symmetric(vertical: 16),
             child: Text(
               'Belum ada pengeluaran pada tanggal ini',
@@ -427,9 +464,9 @@ class _DayView extends StatelessWidget {
               final cat = categoryOf(e.categoryId);
 
               return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
+                padding: EdgeInsets.only(bottom: 12),
                 child: Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: themeColor.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(16),
@@ -445,31 +482,31 @@ class _DayView extends StatelessWidget {
                         ),
                         child: Icon(
                           cat?.icon ?? Icons.category_rounded,
-                          color: Colors.white,
+                          color: AppColors.onColor(cat?.color ?? AppColors.softCoral),
                           size: 20,
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      SizedBox(width: 10),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               cat?.name ?? 'Lainnya',
-                              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.textDark),
+                              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.textDark),
                             ),
                             Text(
                               e.description.isEmpty ? '-' : e.description,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 12, color: AppColors.textGrey),
+                              style: TextStyle(fontSize: 12, color: AppColors.textGrey),
                             ),
                           ],
                         ),
                       ),
                       Text(
                         Formatters.rupiah(e.amount),
-                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.textDark),
+                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.textDark),
                       ),
                     ],
                   ),
@@ -484,16 +521,16 @@ class _DayView extends StatelessWidget {
   Widget _buildCalendarGrid(BuildContext context, int daysInMonth, Set<int> expenseDays) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: themeColor.withOpacity(0.25),
         borderRadius: BorderRadius.circular(28),
       ),
       child: GridView.builder(
         shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
+        physics: NeverScrollableScrollPhysics(),
         itemCount: daysInMonth,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 7,
           mainAxisSpacing: 10,
           crossAxisSpacing: 8,
@@ -508,15 +545,18 @@ class _DayView extends StatelessWidget {
               date.day == selectedDay.day;
 
           final hasExpense = expenseDays.contains(day);
+          final now = DateTime.now();
+          final isToday = date.year == now.year && date.month == now.month && date.day == now.day;
 
           return GestureDetector(
             onTap: () => onDaySelected(date),
             child: Container(
               decoration: BoxDecoration(
-                color: isSelected ? themeColor : Colors.white,
+                color: isSelected ? themeColor : AppColors.surface,
                 shape: BoxShape.circle,
+                border: isToday ? Border.all(color: AppColors.ink, width: 2) : null,
                 boxShadow: isSelected
-                    ? [BoxShadow(color: themeColor.withOpacity(0.4), blurRadius: 4, offset: const Offset(0, 2))]
+                    ? [BoxShadow(color: themeColor.withOpacity(0.4), blurRadius: 4, offset: Offset(0, 2))]
                     : null,
               ),
               alignment: Alignment.center,
@@ -528,12 +568,12 @@ class _DayView extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: AppColors.textDark, // Dibuat selalu gelap agar tetap terlihat jelas
+                      color: isSelected ? AppColors.onPastel : AppColors.textDark,
                     ),
                   ),
                   if (hasExpense && !isSelected)
                     Container(
-                      margin: const EdgeInsets.only(top: 2),
+                      margin: EdgeInsets.only(top: 2),
                       width: 4,
                       height: 4,
                       decoration: BoxDecoration(
@@ -556,12 +596,12 @@ class _DayView extends StatelessWidget {
     if (sortedDays.isEmpty) {
       return Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: themeColor.withOpacity(0.25),
           borderRadius: BorderRadius.circular(28),
         ),
-        child: const Center(
+        child: Center(
           child: Text(
             'Belum ada tanggal dengan pengeluaran bulan ini',
             style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.w600),
@@ -582,12 +622,12 @@ class _DayView extends StatelessWidget {
             .fold<double>(0, (sum, e) => sum + e.amount);
 
         return Padding(
-          padding: const EdgeInsets.only(bottom: 10),
+          padding: EdgeInsets.only(bottom: 10),
           child: InkWell(
             borderRadius: BorderRadius.circular(16),
             onTap: () => onDaySelected(date),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
                 color: isSelected ? themeColor : themeColor.withOpacity(0.18),
                 borderRadius: BorderRadius.circular(16),
@@ -597,14 +637,14 @@ class _DayView extends StatelessWidget {
                 children: [
                   Text(
                     Formatters.date(date),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w700,
-                      color: AppColors.textDark,
+                      color: isSelected ? AppColors.onPastel : AppColors.textDark,
                     ),
                   ),
                   Text(
                     Formatters.rupiah(total),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w800,
                       color: AppColors.textDark,
                     ),
@@ -652,8 +692,8 @@ class _MonthView extends StatelessWidget {
           _buildBarChart(context, totals)
         else
           _buildDataList(context, totals),
-        const SizedBox(height: 22),
-        const Text(
+        SizedBox(height: 22),
+        Text(
           'Pengeluaran sesuai kategori',
           style: TextStyle(
             color: AppColors.textDark,
@@ -661,9 +701,9 @@ class _MonthView extends StatelessWidget {
             fontWeight: FontWeight.w700,
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: 12),
         if (catEntries.isEmpty)
-          const Padding(
+          Padding(
             padding: EdgeInsets.symmetric(vertical: 16),
             child: Text(
               'Belum ada pengeluaran bulan ini',
@@ -676,9 +716,9 @@ class _MonthView extends StatelessWidget {
               final value = catTotals[cat.id] ?? 0;
 
               return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
+                padding: EdgeInsets.only(bottom: 12),
                 child: Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: themeColor.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(16),
@@ -692,18 +732,18 @@ class _MonthView extends StatelessWidget {
                           color: cat.color,
                           shape: BoxShape.circle,
                         ),
-                        child: Icon(cat.icon, color: Colors.white, size: 20),
+                        child: Icon(cat.icon, color: AppColors.onColor(cat.color), size: 20),
                       ),
-                      const SizedBox(width: 10),
+                      SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           cat.name,
-                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.textDark),
+                          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.textDark),
                         ),
                       ),
                       Text(
                         Formatters.rupiah(value),
-                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.textDark),
+                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.textDark),
                       ),
                     ],
                   ),
@@ -721,14 +761,14 @@ class _MonthView extends StatelessWidget {
     return Container(
       width: double.infinity,
       height: 260,
-      padding: const EdgeInsets.fromLTRB(8, 20, 12, 12),
+      padding: EdgeInsets.fromLTRB(8, 20, 12, 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(28),
         border: Border.all(color: AppColors.ink, width: 1.5),
       ),
       child: maxValue == 0
-          ? const Center(
+          ? Center(
         child: Text(
           'Belum ada data pengeluaran tahun ini.\nCatat pengeluaran pertama dengan tombol +.',
           textAlign: TextAlign.center,
@@ -739,21 +779,21 @@ class _MonthView extends StatelessWidget {
         BarChartData(
           maxY: maxValue * 1.2,
           alignment: BarChartAlignment.spaceAround,
-          gridData: const FlGridData(show: false),
+          gridData: FlGridData(show: false),
           borderData: FlBorderData(show: false),
           barTouchData: BarTouchData(enabled: false),
           titlesData: FlTitlesData(
-            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
             rightTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
                 reservedSize: 66,
                 getTitlesWidget: (value, meta) => Padding(
-                  padding: const EdgeInsets.only(left: 4),
+                  padding: EdgeInsets.only(left: 4),
                   child: Text(
                     Formatters.rupiah(value),
-                    style: const TextStyle(fontSize: 12, color: AppColors.textDark),
+                    style: TextStyle(fontSize: 12, color: AppColors.textDark),
                   ),
                 ),
               ),
@@ -763,13 +803,13 @@ class _MonthView extends StatelessWidget {
                 showTitles: true,
                 getTitlesWidget: (value, meta) {
                   final idx = value.toInt();
-                  if (idx < 1 || idx > 12) return const SizedBox.shrink();
+                  if (idx < 1 || idx > 12) return SizedBox.shrink();
 
                   return Padding(
-                    padding: const EdgeInsets.only(top: 6),
+                    padding: EdgeInsets.only(top: 6),
                     child: Text(
                       Formatters.monthNames[idx - 1].substring(0, 3),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         color: AppColors.textDark,
                         fontWeight: FontWeight.w600,
@@ -809,7 +849,7 @@ class _MonthView extends StatelessWidget {
   Widget _buildDataList(BuildContext context, Map<int, double> totals) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: themeColor.withOpacity(0.25),
         borderRadius: BorderRadius.circular(28),
@@ -826,9 +866,9 @@ class _MonthView extends StatelessWidget {
               borderRadius: BorderRadius.circular(16),
               onTap: () => onMonthSelected(m),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
-                  color: isSelected ? themeColor : Colors.white,
+                  color: isSelected ? themeColor : AppColors.surface,
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Row(
@@ -836,14 +876,14 @@ class _MonthView extends StatelessWidget {
                   children: [
                     Text(
                       Formatters.monthNames[i],
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.w700,
-                        color: AppColors.textDark,
+                        color: isSelected ? AppColors.onPastel : AppColors.textDark,
                       ),
                     ),
                     Text(
                       Formatters.rupiah(value),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.w800,
                         color: AppColors.textDark,
                       ),

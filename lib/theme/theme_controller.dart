@@ -1,22 +1,58 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/storage_service.dart';
 import 'app_colors.dart';
 
-/// Mengatur warna aksen aplikasi (dipakai di card Beranda, tombol tambah,
-/// dan ikon navbar yang aktif) supaya bisa diganti sesuai selera user lewat
-/// halaman Tampilan, lalu disimpan lokal di memori HP.
+enum AppThemeMode { system, light, dark }
+
+/// Mengatur warna aksen dan mode tema (Sistem/Terang/Gelap). Keduanya
+/// disimpan lokal. [AppColors.isDark] selalu disinkronkan di sini sebelum
+/// listener (MaterialApp) membangun ulang tema.
 class ThemeController extends ChangeNotifier {
   ThemeController._();
   static final ThemeController instance = ThemeController._();
 
+  static const _kMode = 'theme_mode';
+
   Color accentColor = AppColors.softPurple;
+  AppThemeMode mode = AppThemeMode.system;
+
+  bool get isDark => switch (mode) {
+        AppThemeMode.dark => true,
+        AppThemeMode.light => false,
+        AppThemeMode.system =>
+          WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark,
+      };
+
+  /// Sinkronkan flag palet dengan mode saat ini (tanpa notifikasi).
+  void syncPalette() => AppColors.isDark = isDark;
 
   Future<void> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final m = prefs.getString(_kMode);
+    mode = AppThemeMode.values.firstWhere(
+      (e) => e.name == m,
+      orElse: () => AppThemeMode.system,
+    );
     final saved = await StorageService.instance.getAccentColor();
-    if (saved != null) {
-      accentColor = Color(saved);
-      notifyListeners();
-    }
+    if (saved != null) accentColor = Color(saved);
+    syncPalette();
+    notifyListeners();
+  }
+
+  Future<void> setMode(AppThemeMode value) async {
+    mode = value;
+    syncPalette();
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kMode, value.name);
+  }
+
+  /// Dipanggil saat tema sistem berubah (hanya berpengaruh pada mode Sistem).
+  void onPlatformBrightnessChanged() {
+    if (mode != AppThemeMode.system) return;
+    syncPalette();
+    notifyListeners();
   }
 
   Future<void> setAccent(Color color) async {

@@ -47,7 +47,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       setState(() => _error = err);
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password berhasil diubah')));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Password berhasil diubah')));
     Navigator.of(context).pop();
   }
 
@@ -58,25 +58,25 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       appBar: AppBar(
         leading: IconButton(
           onPressed: () => Navigator.of(context).pop(),
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textDark),
+          icon: Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textDark),
         ),
-        title: const Text('Ubah Password', style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.w800)),
+        title: Text('Ubah Password', style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.w800)),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             AppTextField(label: 'Password lama', controller: _old, obscureText: true, hint: '********'),
-            const SizedBox(height: 18),
+            SizedBox(height: 18),
             AppTextField(label: 'Password baru', controller: _new, obscureText: true, hint: 'minimal 6 karakter'),
-            const SizedBox(height: 18),
+            SizedBox(height: 18),
             AppTextField(label: 'Konfirmasi password baru', controller: _confirm, obscureText: true, hint: '********'),
             if (_error != null) ...[
-              const SizedBox(height: 12),
-              Text(_error!, style: const TextStyle(color: Colors.red)),
+              SizedBox(height: 12),
+              Text(_error!, style: TextStyle(color: Colors.red)),
             ],
-            const SizedBox(height: 26),
+            SizedBox(height: 26),
             SizedBox(
               width: double.infinity,
               height: 54,
@@ -89,12 +89,12 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                 ),
                 onPressed: _loading ? null : _submit,
                 child: _loading
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                       )
-                    : const Text('Simpan Password', style: TextStyle(fontWeight: FontWeight.w700)),
+                    : Text('Simpan Password', style: TextStyle(fontWeight: FontWeight.w700)),
               ),
             ),
           ],

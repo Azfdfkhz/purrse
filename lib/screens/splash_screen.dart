@@ -20,13 +20,13 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _bootstrap() async {
-    await Future.delayed(const Duration(milliseconds: 1400));
+    await Future.delayed(Duration(milliseconds: 1400));
     await ThemeController.instance.load();
     final user = await StorageService.instance.getCurrentUser();
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => user != null ? const NavbarShell() : const AuthChoiceScreen(),
+        builder: (_) => user != null ? NavbarShell() : AuthChoiceScreen(),
       ),
     );
   }
@@ -40,7 +40,7 @@ class _SplashScreenState extends State<SplashScreen> {
           tween: Tween(begin: 0.85, end: 1),
           duration: MediaQuery.of(context).disableAnimations
               ? Duration.zero
-              : const Duration(milliseconds: 700),
+              : Duration(milliseconds: 700),
           curve: Curves.easeOutBack,
           builder: (_, t, child) => Opacity(
             opacity: t.clamp(0.0, 1.0),

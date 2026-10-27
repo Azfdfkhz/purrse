@@ -47,7 +47,7 @@ class _NavbarShellState extends State<NavbarShell> {
     ),
     TransaksiScreen(key: _transaksiKey),
     LaporanScreen(key: _laporanKey),
-    const ProfileScreen(),
+    ProfileScreen(),
   ];
 
   Future<void> _openAddExpense() async {
@@ -68,7 +68,7 @@ class _NavbarShellState extends State<NavbarShell> {
       if (mounted) {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
-          ..showSnackBar(const SnackBar(content: Text('Pengeluaran tersimpan ✓')));
+          ..showSnackBar(SnackBar(content: Text('Pengeluaran tersimpan ✓')));
       }
     }
   }
@@ -119,7 +119,7 @@ class _BottomBar extends StatelessWidget {
         final accent = ThemeController.instance.accentColor;
 
         return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+          padding: EdgeInsets.fromLTRB(16, 0, 16, 14),
           child: SizedBox(
             height: 82,
             child: Stack(
@@ -129,7 +129,7 @@ class _BottomBar extends StatelessWidget {
                 // Pil hitam melayang
                 Container(
                   height: 68,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  padding: EdgeInsets.symmetric(horizontal: 8),
                   decoration: BoxDecoration(
                     color: AppColors.ink,
                     borderRadius: BorderRadius.circular(34),
@@ -137,7 +137,7 @@ class _BottomBar extends StatelessWidget {
                       BoxShadow(
                         color: Colors.black.withOpacity(0.22),
                         blurRadius: 20,
-                        offset: const Offset(0, 10),
+                        offset: Offset(0, 10),
                       ),
                     ],
                   ),
@@ -145,7 +145,7 @@ class _BottomBar extends StatelessWidget {
                     children: [
                       _NavItem(icon: Icons.home_rounded, label: 'Beranda', selected: currentIndex == 0, onTap: () => onTap(0)),
                       _NavItem(icon: Icons.receipt_long_rounded, label: 'Transaksi', selected: currentIndex == 1, onTap: () => onTap(1)),
-                      const SizedBox(width: 64), // ruang tombol (+)
+                      SizedBox(width: 64), // ruang tombol (+)
                       _NavItem(icon: Icons.bar_chart_rounded, label: 'Laporan', selected: currentIndex == 2, onTap: () => onTap(2)),
                       _NavItem(icon: Icons.person_rounded, label: 'Akun', selected: currentIndex == 3, onTap: () => onTap(3)),
                     ],
@@ -169,7 +169,7 @@ class _BottomBar extends StatelessWidget {
                           shape: BoxShape.circle,
                           border: Border.all(color: AppColors.ink, width: 3),
                         ),
-                        child: const Icon(Icons.add_rounded, color: AppColors.ink, size: 32),
+                        child: Icon(Icons.add_rounded, color: AppColors.ink, size: 32),
                       ),
                     ),
                   ),
@@ -209,7 +209,7 @@ class _NavItem extends StatelessWidget {
             child: AnimatedContainer(
               duration: motion(context, 220),
               curve: Curves.easeOutCubic,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               decoration: BoxDecoration(
                 color: selected ? Colors.white : Colors.transparent,
                 borderRadius: BorderRadius.circular(22),
@@ -218,7 +218,7 @@ class _NavItem extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(icon, size: 24, color: selected ? AppColors.ink : Colors.white70),
-                  const SizedBox(height: 2),
+                  SizedBox(height: 2),
                   Text(
                     label,
                     maxLines: 1,

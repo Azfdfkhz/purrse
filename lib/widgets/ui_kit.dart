@@ -76,7 +76,7 @@ class FadeSlideIn extends StatelessWidget {
 class InkCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
-  final Color color;
+  final Color? color;
   final double radius;
   final bool bold; // outline tebal (true) atau tipis lembut (false)
 
@@ -84,7 +84,7 @@ class InkCard extends StatelessWidget {
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(16),
-    this.color = Colors.white,
+    this.color,
     this.radius = 24,
     this.bold = true,
   });
@@ -94,7 +94,7 @@ class InkCard extends StatelessWidget {
     return Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: color,
+        color: color ?? AppColors.surface,
         borderRadius: BorderRadius.circular(radius),
         border: Border.all(
           color: bold ? AppColors.ink : AppColors.cardBorder,
@@ -131,7 +131,7 @@ class InkButton extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         if (loading)
-          const SizedBox(
+          SizedBox(
             width: 20,
             height: 20,
             child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white),
@@ -139,11 +139,11 @@ class InkButton extends StatelessWidget {
         else ...[
           if (icon != null) ...[
             Icon(icon, color: Colors.white, size: 20),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
           ],
           Text(
             label,
-            style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800),
+            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800),
           ),
         ],
       ],
@@ -157,7 +157,7 @@ class InkButton extends StatelessWidget {
         child: AnimatedContainer(
           duration: motion(context, 180),
           height: 54,
-          padding: const EdgeInsets.symmetric(horizontal: 28),
+          padding: EdgeInsets.symmetric(horizontal: 28),
           decoration: BoxDecoration(
             color: enabled || loading ? AppColors.ink : AppColors.ink.withOpacity(0.35),
             borderRadius: BorderRadius.circular(30),

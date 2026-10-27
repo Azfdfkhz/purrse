@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../profile/notification_settings_screen.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../models/expense_model.dart';
 import '../../models/category_model.dart';
@@ -36,7 +37,10 @@ class BerandaScreenState extends State<BerandaScreen> {
   Future<void> reload() async {
     setState(() => _loading = true);
     final user = await StorageService.instance.getCurrentUser();
-    if (user == null) return;
+    if (user == null) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
     final all = await StorageService.instance.getExpenses(user.id);
     final cats = await StorageService.instance.getCategories(user.id);
     if (!mounted) return;
@@ -52,8 +56,8 @@ class BerandaScreenState extends State<BerandaScreen> {
     final themeColor = ThemeController.instance.accentColor;
     final selected = await showModalBottomSheet<int>(
       context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
+      backgroundColor: AppColors.surface,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (_) => SizedBox(
@@ -96,6 +100,27 @@ class BerandaScreenState extends State<BerandaScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_loading && _user == null) {
+      return Center(
+        child: Padding(
+          padding: EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.error_outline_rounded, size: 40, color: AppColors.textGrey),
+              SizedBox(height: 12),
+              Text(
+                'Data akun tidak dapat dimuat.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.textDark),
+              ),
+              SizedBox(height: 16),
+              FilledButton(onPressed: reload, child: Text('Coba lagi')),
+            ],
+          ),
+        ),
+      );
+    }
     if (_loading || _user == null) {
       return AnimatedBuilder(
         animation: ThemeController.instance,
@@ -115,7 +140,7 @@ class BerandaScreenState extends State<BerandaScreen> {
         final themeColor = ThemeController.instance.accentColor;
 
         return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+          padding: EdgeInsets.fromLTRB(20, 12, 20, 8),
           child: Column(
             children: [
               // Header
@@ -129,9 +154,11 @@ class BerandaScreenState extends State<BerandaScreen> {
                     ),
                   ),
                   IconButton(
-                    onPressed: () {},
-                    tooltip: 'Notifikasi',
-                    icon: const Icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => NotificationSettingsScreen()),
+                    ),
+                    tooltip: 'Pengaturan notifikasi',
+                    icon: Icon(
                       Icons.notifications_none_rounded,
                       color: AppColors.textDark,
                       size: 26,
@@ -147,13 +174,13 @@ class BerandaScreenState extends State<BerandaScreen> {
                         ? FileImage(File(_user!.avatarPath!))
                         : null,
                     child: (_user?.avatarPath == null || _user!.avatarPath!.isEmpty)
-                        ? const Icon(Icons.person, color: AppColors.textDark)
+                        ? Icon(Icons.person, color: AppColors.onPastel)
                         : null,
                   ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
 
               // Card Saldo/Pengeluaran
               FadeSlideIn(child: _BalanceCard(
@@ -161,6 +188,7 @@ class BerandaScreenState extends State<BerandaScreen> {
                 total: _total,
                 month: _month,
                 color: themeColor,
+                year: _year,
                 onMonthTap: _pickMonth,
                 onSummaryTap: () {
                   if (widget.onNavigateToLaporan != null) {
@@ -168,7 +196,7 @@ class BerandaScreenState extends State<BerandaScreen> {
                   }
                 },
               )),
-              const SizedBox(height: 14),
+              SizedBox(height: 14),
 
               // Donut Chart & Legenda
               SizedBox(
@@ -185,7 +213,7 @@ class BerandaScreenState extends State<BerandaScreen> {
                         categories: _categories,
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    SizedBox(width: 12),
                     Expanded(
                       child: _LegendCard(
                         byCategory: byCategory,
@@ -195,7 +223,7 @@ class BerandaScreenState extends State<BerandaScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 14),
+              SizedBox(height: 14),
 
               // List Pengeluaran Terbaru
               Expanded(
@@ -217,6 +245,7 @@ class _BalanceCard extends StatelessWidget {
   final double total;
   final int month;
   final int count;
+  final int year;
   final Color color;
   final VoidCallback onMonthTap;
   final VoidCallback onSummaryTap;
@@ -225,6 +254,7 @@ class _BalanceCard extends StatelessWidget {
     required this.total,
     required this.month,
     required this.count,
+    required this.year,
     required this.color,
     required this.onMonthTap,
     required this.onSummaryTap,
@@ -238,7 +268,7 @@ class _BalanceCard extends StatelessWidget {
         children: [
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
+            padding: EdgeInsets.fromLTRB(22, 20, 22, 20),
             color: AppColors.ink,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -246,9 +276,9 @@ class _BalanceCard extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Flexible(
+                    Flexible(
                       child: Text(
-                        'Pengeluaran bulan ini',
+                        'Total pengeluaran',
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w600),
                       ),
@@ -256,7 +286,7 @@ class _BalanceCard extends StatelessWidget {
                     Pressable(
                       onTap: onMonthTap,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
                           color: color,
                           borderRadius: BorderRadius.circular(20),
@@ -265,38 +295,38 @@ class _BalanceCard extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              Formatters.monthNames[month - 1],
-                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.ink),
+                              '${Formatters.monthNames[month - 1]} $year',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.ink),
                             ),
-                            const SizedBox(width: 2),
-                            const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: AppColors.ink),
+                            SizedBox(width: 2),
+                            Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: AppColors.ink),
                           ],
                         ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
+                SizedBox(height: 10),
                 FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
                   child: Text(
                     Formatters.rupiah(total),
-                    style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: Colors.white),
+                    style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: Colors.white),
                   ),
                 ),
-                const SizedBox(height: 14),
+                SizedBox(height: 14),
                 Row(
                   children: [
                     Pressable(
                       onTap: onSummaryTap,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(22),
                         ),
-                        child: const Row(
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
@@ -309,12 +339,12 @@ class _BalanceCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    SizedBox(width: 10),
                     Flexible(
                       child: Text(
                         '$count transaksi',
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
+                        style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
                       ),
                     ),
                   ],
@@ -383,9 +413,9 @@ class _DonutCard extends StatelessWidget {
     }
 
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: AppColors.ink, width: 1.5),
       ),
@@ -405,17 +435,17 @@ class _DonutCard extends StatelessWidget {
             children: [
               Text(
                 Formatters.monthNames[month - 1],
-                style: const TextStyle(fontSize: 12, color: AppColors.textGrey),
+                style: TextStyle(fontSize: 12, color: AppColors.textGrey),
               ),
-              const SizedBox(height: 2),
+              SizedBox(height: 2),
               Text(
                 Formatters.rupiah(total),
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
               ),
               Text(
                 '$year',
-                style: const TextStyle(fontSize: 12, color: AppColors.textGrey),
+                style: TextStyle(fontSize: 12, color: AppColors.textGrey),
               ),
             ],
           ),
@@ -435,24 +465,24 @@ class _LegendCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final entries = categories.where((c) => byCategory.containsKey(c.id)).toList();
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: AppColors.ink, width: 1.5),
       ),
       child: entries.isEmpty
-          ? const Center(
+          ? Center(
         child: Text(
           'Belum ada data',
           style: TextStyle(color: AppColors.textGrey, fontSize: 12),
         ),
       )
           : ListView.separated(
-        physics: const BouncingScrollPhysics(),
+        physics: BouncingScrollPhysics(),
         padding: EdgeInsets.zero,
         itemCount: entries.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        separatorBuilder: (_, __) => SizedBox(height: 10),
         itemBuilder: (_, i) {
           final cat = entries[i];
           final value = byCategory[cat.id] ?? 0;
@@ -466,7 +496,7 @@ class _LegendCard extends StatelessWidget {
                   shape: BoxShape.circle,
                 ),
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: 8),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -475,14 +505,14 @@ class _LegendCard extends StatelessWidget {
                       cat.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     Text(
                       Formatters.rupiah(value),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         color: AppColors.textGrey,
                       ),
@@ -513,23 +543,23 @@ class _RecentExpensesCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: AppColors.ink, width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Pengeluaran terbaru',
             style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           Expanded(
             child: expenses.isEmpty
-                ? const Center(
+                ? Center(
               child: Text(
                 'Belum ada pengeluaran bulan ini.\nKetuk tombol + untuk mencatat.',
                 textAlign: TextAlign.center,
@@ -538,12 +568,12 @@ class _RecentExpensesCard extends StatelessWidget {
             )
                 : ListView.separated(
               itemCount: expenses.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              separatorBuilder: (_, __) => SizedBox(height: 10),
               itemBuilder: (_, i) {
                 final e = expenses[i];
                 final cat = categoryOf(e.categoryId);
                 return Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: AppColors.background,
                     borderRadius: BorderRadius.circular(18),
@@ -565,14 +595,14 @@ class _RecentExpensesCard extends StatelessWidget {
                           size: 20,
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      SizedBox(width: 10),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               cat?.name ?? 'Lainnya',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.w700,
                                 fontSize: 13,
                               ),
@@ -581,7 +611,7 @@ class _RecentExpensesCard extends StatelessWidget {
                               e.description.isEmpty ? '-' : e.description,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
                                 color: AppColors.textGrey,
                               ),
@@ -594,15 +624,15 @@ class _RecentExpensesCard extends StatelessWidget {
                         children: [
                           Text(
                             Formatters.date(e.date),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12,
                               color: AppColors.textGrey,
                             ),
                           ),
-                          const SizedBox(height: 4),
+                          SizedBox(height: 4),
                           Text(
                             Formatters.rupiah(e.amount),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontWeight: FontWeight.w800,
                               fontSize: 14,
                             ),

@@ -118,11 +118,11 @@ class TransaksiScreenState extends State<TransaksiScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Hapus transaksi?'),
-        content: const Text('Transaksi ini akan dihapus dari riwayat pengeluaran.'),
+        title: Text('Hapus transaksi?'),
+        content: Text('Transaksi ini akan dihapus dari riwayat pengeluaran.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Hapus')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text('Batal')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: Text('Hapus')),
         ],
       ),
     );
@@ -141,13 +141,13 @@ class TransaksiScreenState extends State<TransaksiScreen> {
       color: primary,
       onRefresh: reload,
       child: CustomScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
+        physics: AlwaysScrollableScrollPhysics(),
         slivers: [
           SliverAppBar(
             pinned: true,
             backgroundColor: AppColors.background,
             surfaceTintColor: Colors.transparent,
-            title: const Text('Transaksi', style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.textDark)),
+            title: Text('Transaksi', style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.textDark)),
             actions: [
               IconButton(
                 onPressed: _pickDate,
@@ -158,14 +158,14 @@ class TransaksiScreenState extends State<TransaksiScreen> {
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+              padding: EdgeInsets.fromLTRB(20, 4, 20, 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Foto transaksi', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.textDark)),
-                  const SizedBox(height: 4),
-                  const Text('Lihat bukti pengeluaran berdasarkan kategori dan tanggal.', style: TextStyle(color: AppColors.textGrey, fontSize: 13)),
-                  const SizedBox(height: 18),
+                  Text('Foto transaksi', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.textDark)),
+                  SizedBox(height: 4),
+                  Text('Lihat bukti pengeluaran berdasarkan kategori dan tanggal.', style: TextStyle(color: AppColors.textGrey, fontSize: 13)),
+                  SizedBox(height: 18),
                   SizedBox(
                     height: 38,
                     child: ListView(
@@ -178,7 +178,7 @@ class TransaksiScreenState extends State<TransaksiScreen> {
                           color: primary,
                         ),
                         ..._categories.map((category) => Padding(
-                              padding: const EdgeInsets.only(left: 8),
+                              padding: EdgeInsets.only(left: 8),
                               child: _FilterChip(
                                 label: category.name,
                                 selected: _categoryId == category.id,
@@ -190,7 +190,7 @@ class TransaksiScreenState extends State<TransaksiScreen> {
                     ),
                   ),
                   if (_selectedDate != null) ...[
-                    const SizedBox(height: 10),
+                    SizedBox(height: 10),
                     InputChip(
                       label: Text(_dateLabel(_selectedDate!)),
                       avatar: Icon(Icons.event_rounded, size: 17, color: primary),
@@ -198,25 +198,25 @@ class TransaksiScreenState extends State<TransaksiScreen> {
                       deleteIconColor: primary,
                     ),
                   ],
-                  const SizedBox(height: 12),
+                  SizedBox(height: 12),
                 ],
               ),
             ),
           ),
           if (_loading)
-            const SliverFillRemaining(child: Center(child: CircularProgressIndicator()))
+            SliverFillRemaining(child: Center(child: CircularProgressIndicator()))
           else if (_filteredExpenses.isEmpty)
-            const SliverFillRemaining(child: _EmptyTransactions())
+            SliverFillRemaining(child: _EmptyTransactions())
           else
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
+              padding: EdgeInsets.fromLTRB(20, 4, 20, 28),
               sliver: SliverList.builder(
                 itemCount: _filteredExpenses.length,
                 itemBuilder: (context, index) {
                   final expense = _filteredExpenses[index];
                   final category = _categoryFor(expense.categoryId);
                   return Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
+                    padding: EdgeInsets.only(bottom: 14),
                     child: _TransactionCard(
                       expense: expense,
                       category: category,
@@ -254,7 +254,7 @@ class _FilterChip extends StatelessWidget {
         fontWeight: FontWeight.w700,
         fontSize: 13,
       ),
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       side: BorderSide(color: AppColors.ink, width: selected ? 1.5 : 1),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       showCheckmark: false,
@@ -289,13 +289,13 @@ class _TransactionCard extends StatelessWidget {
   (String, Color, IconData) _uploadInfo() {
     switch (expense.uploadStatus) {
       case UploadStatus.uploaded:
-        return ('Tersimpan di Drive', const Color(0xFF2E7D32), Icons.cloud_done_rounded);
+        return ('Tersimpan di Drive', Color(0xFF2E7D32), Icons.cloud_done_rounded);
       case UploadStatus.uploading:
-        return ('Mengunggah…', const Color(0xFF1565C0), Icons.cloud_upload_rounded);
+        return ('Mengunggah…', Color(0xFF1565C0), Icons.cloud_upload_rounded);
       case UploadStatus.failed:
-        return ('Upload gagal', const Color(0xFFC62828), Icons.cloud_off_rounded);
+        return ('Upload gagal', Color(0xFFC62828), Icons.cloud_off_rounded);
       case UploadStatus.needsAuth:
-        return ('Hubungkan Drive', const Color(0xFFEF6C00), Icons.link_off_rounded);
+        return ('Hubungkan Drive', Color(0xFFEF6C00), Icons.link_off_rounded);
       default:
         return ('Menunggu upload', AppColors.textGrey, Icons.cloud_queue_rounded);
     }
@@ -306,7 +306,7 @@ class _TransactionCard extends StatelessWidget {
     final primary = Theme.of(context).colorScheme.primary;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(22),
         border: Border.all(color: AppColors.ink, width: 1.5),
       ),
@@ -314,34 +314,34 @@ class _TransactionCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
             child: GestureDetector(
               onTap: () => _showImage(context),
               child: _image(height: 210, fit: BoxFit.cover),
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 12, 15),
+            padding: EdgeInsets.fromLTRB(16, 14, 12, 15),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
                   width: 42,
                   height: 42,
-                  decoration: BoxDecoration(color: (category?.color ?? primary).withOpacity(0.18), borderRadius: BorderRadius.circular(13)),
-                  child: Icon(category?.icon ?? Icons.category_rounded, color: category?.color ?? primary, size: 20),
+                  decoration: BoxDecoration(color: (category?.color ?? primary).withOpacity(0.45), borderRadius: BorderRadius.circular(13)),
+                  child: Icon(category?.icon ?? Icons.category_rounded, color: AppColors.textDark, size: 20),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(expense.description.isEmpty ? 'Pengeluaran' : expense.description, style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.textDark, fontSize: 15)),
-                      const SizedBox(height: 4),
-                      Text('${category?.name ?? 'Tanpa kategori'} · ${Formatters.date(expense.date)}', style: const TextStyle(color: AppColors.textGrey, fontSize: 12)),
-                      const SizedBox(height: 6),
+                      Text(expense.description.isEmpty ? 'Pengeluaran' : expense.description, style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.textDark, fontSize: 15)),
+                      SizedBox(height: 4),
+                      Text('${category?.name ?? 'Tanpa kategori'} · ${Formatters.date(expense.date)}', style: TextStyle(color: AppColors.textGrey, fontSize: 12)),
+                      SizedBox(height: 6),
                       Text(Formatters.currency(expense.amount), style: TextStyle(color: primary, fontWeight: FontWeight.w800, fontSize: 17)),
-                      const SizedBox(height: 8),
+                      SizedBox(height: 8),
                       Builder(builder: (_) {
                         final (label, color, icon) = _uploadInfo();
                         final canRetry = expense.uploadStatus == UploadStatus.failed ||
@@ -356,7 +356,7 @@ class _TransactionCard extends StatelessWidget {
                               InkWell(
                                 onTap: onRetry,
                                 child: Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+                                  padding: EdgeInsets.symmetric(vertical: 4, horizontal: 4),
                                   child: Text('Coba lagi', style: TextStyle(fontSize: 12, color: primary, fontWeight: FontWeight.w800)),
                                 ),
                               ),
@@ -368,12 +368,12 @@ class _TransactionCard extends StatelessWidget {
                 ),
                 PopupMenuButton<String>(
                   tooltip: 'Menu transaksi',
-                  icon: const Icon(Icons.more_vert_rounded, color: AppColors.textGrey),
+                  icon: Icon(Icons.more_vert_rounded, color: AppColors.textGrey),
                   onSelected: (v) {
                     if (v == 'edit') onEdit();
                     if (v == 'delete') onDelete();
                   },
-                  itemBuilder: (_) => const [
+                  itemBuilder: (_) => [
                     PopupMenuItem(value: 'edit', child: Text('Edit')),
                     PopupMenuItem(value: 'delete', child: Text('Hapus')),
                   ],
@@ -392,7 +392,7 @@ class _TransactionCard extends StatelessWidget {
       context: context,
       builder: (_) => Dialog(
         backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.all(18),
+        insetPadding: EdgeInsets.all(18),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(20),
           child: InteractiveViewer(child: _image(height: 520, fit: BoxFit.contain)),
@@ -410,7 +410,7 @@ class _EmptyTransactions extends StatelessWidget {
     final primary = Theme.of(context).colorScheme.primary;
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(28),
+        padding: EdgeInsets.all(28),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -420,10 +420,10 @@ class _EmptyTransactions extends StatelessWidget {
               decoration: BoxDecoration(color: primary.withOpacity(0.18), shape: BoxShape.circle),
               child: Icon(Icons.photo_library_outlined, color: primary, size: 38),
             ),
-            const SizedBox(height: 16),
-            const Text('Belum ada foto transaksi', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
-            const SizedBox(height: 6),
-            const Text('Upload foto bukti saat mencatat pengeluaran agar foto muncul di sini.', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textGrey, fontSize: 13)),
+            SizedBox(height: 16),
+            Text('Belum ada foto transaksi', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+            SizedBox(height: 6),
+            Text('Upload foto bukti saat mencatat pengeluaran agar foto muncul di sini.', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textGrey, fontSize: 13)),
           ],
         ),
       ),
@@ -455,7 +455,7 @@ class _DriveImageState extends State<_DriveImage> {
         future: _future,
         builder: (context, snap) {
           if (snap.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
+            return Center(child: CircularProgressIndicator());
           }
           if (snap.hasError || snap.data == null) {
             return Center(
@@ -463,8 +463,8 @@ class _DriveImageState extends State<_DriveImage> {
                 onPressed: () => setState(() {
                   _future = GoogleDriveService.instance.downloadProof(widget.fileId);
                 }),
-                icon: const Icon(Icons.refresh_rounded),
-                label: const Text('Foto belum bisa dimuat. Ketuk untuk coba lagi'),
+                icon: Icon(Icons.refresh_rounded),
+                label: Text('Foto belum bisa dimuat. Ketuk untuk coba lagi'),
               ),
             );
           }

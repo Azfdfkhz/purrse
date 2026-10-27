@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'auto_backup_service.dart';
 import 'package:uuid/uuid.dart';
 import '../models/user_model.dart';
 import '../models/expense_model.dart';
@@ -127,10 +128,10 @@ class StorageService {
   // ---------- Categories ----------
   Future<void> _seedDefaultCategories(String userId) async {
     final defaults = [
-      CategoryModel(id: _uuid.v4(), name: 'Makanan', color: const Color(0xFF8FC1E8), icon: Icons.restaurant),
-      CategoryModel(id: _uuid.v4(), name: 'Hiburan', color: const Color(0xFF8FDCC9), icon: Icons.movie_filter),
-      CategoryModel(id: _uuid.v4(), name: 'Transport', color: const Color(0xFFF5C77E), icon: Icons.directions_car),
-      CategoryModel(id: _uuid.v4(), name: 'Lainnya', color: const Color(0xFFF29C93), icon: Icons.account_balance_wallet),
+      CategoryModel(id: _uuid.v4(), name: 'Makanan', color: Color(0xFF8FC1E8), icon: Icons.restaurant),
+      CategoryModel(id: _uuid.v4(), name: 'Hiburan', color: Color(0xFF8FDCC9), icon: Icons.movie_filter),
+      CategoryModel(id: _uuid.v4(), name: 'Transport', color: Color(0xFFF5C77E), icon: Icons.directions_car),
+      CategoryModel(id: _uuid.v4(), name: 'Lainnya', color: Color(0xFFF29C93), icon: Icons.account_balance_wallet),
     ];
     final prefs = await _prefs;
     await prefs.setString(
@@ -205,6 +206,7 @@ class StorageService {
         all.removeWhere((e) => e.id == expense.id);
         all.add(expense);
         await _saveAllExpenses(expense.userId, all);
+        AutoBackupService.instance.markDirty();
       });
 
   /// Ubah satu transaksi. [change] menerima data terbaru dan
@@ -234,6 +236,7 @@ class StorageService {
         syncState: SyncState.pending,
       ),
     );
+    AutoBackupService.instance.markDirty();
   }
 
   /// Hapus lunak (tombstone) agar penghapusan dapat disinkronkan.
@@ -247,6 +250,7 @@ class StorageService {
         syncState: SyncState.pending,
       ),
     );
+    AutoBackupService.instance.markDirty();
   }
 
   /// Transaksi yang foto buktinya belum terunggah.
@@ -376,7 +380,7 @@ class StorageService {
           } catch (_) {}
         }
         if (expenses.isNotEmpty && byId.isEmpty) {
-          throw const FormatException('Isi backup tidak valid, data tidak diubah.');
+          throw FormatException('Isi backup tidak valid, data tidak diubah.');
         }
         await _saveAllExpenses(userId, byId.values.toList());
       });

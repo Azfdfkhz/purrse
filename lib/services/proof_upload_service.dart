@@ -37,7 +37,7 @@ class ProofUploadService {
   /// Mulai pemeriksaan berkala selama aplikasi terbuka.
   void startPeriodic(String userId) {
     _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 60), (_) => processPending(userId));
+    _timer = Timer.periodic(Duration(seconds: 60), (_) => processPending(userId));
     processPending(userId);
   }
 

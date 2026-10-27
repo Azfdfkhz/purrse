@@ -66,12 +66,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       appBar: AppBar(
         leading: IconButton(
           onPressed: () => Navigator.of(context).pop(),
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textDark),
+          icon: Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textDark),
         ),
-        title: const Text('Edit Profile', style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.w800)),
+        title: Text('Edit Profile', style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.w800)),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -85,31 +85,31 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.35),
                       backgroundImage: _avatarPath != null ? FileImage(File(_avatarPath!)) : null,
                       child: _avatarPath == null
-                          ? const Icon(Icons.person, size: 54, color: Colors.white)
+                          ? Icon(Icons.person, size: 54, color: Colors.white)
                           : null,
                     ),
                     Positioned(
                       right: 0,
                       bottom: 0,
                       child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                        child: Icon(Icons.camera_alt_rounded, color: Theme.of(context).colorScheme.primary, size: 20),
+                        padding: EdgeInsets.all(8),
+                        decoration: BoxDecoration(color: AppColors.surface, shape: BoxShape.circle, border: Border.all(color: AppColors.ink, width: 1.2)),
+                        child: Icon(Icons.camera_alt_rounded, color: AppColors.textDark, size: 20),
                       ),
                     ),
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 28),
+            SizedBox(height: 28),
             AppTextField(label: 'Username', controller: _username, hint: 'nama kamu'),
-            const SizedBox(height: 10),
-            Text('Email: ${widget.user.email}', style: const TextStyle(color: AppColors.textGrey, fontSize: 12)),
+            SizedBox(height: 10),
+            Text('Email: ${widget.user.email}', style: TextStyle(color: AppColors.textGrey, fontSize: 12)),
             if (_error != null) ...[
-              const SizedBox(height: 12),
-              Text(_error!, style: const TextStyle(color: Colors.red)),
+              SizedBox(height: 12),
+              Text(_error!, style: TextStyle(color: Colors.red)),
             ],
-            const SizedBox(height: 26),
+            SizedBox(height: 26),
             SizedBox(
               width: double.infinity,
               height: 54,
@@ -122,12 +122,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ),
                 onPressed: _loading ? null : _submit,
                 child: _loading
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                       )
-                    : const Text('Simpan Perubahan', style: TextStyle(fontWeight: FontWeight.w700)),
+                    : Text('Simpan Perubahan', style: TextStyle(fontWeight: FontWeight.w700)),
               ),
             ),
           ],

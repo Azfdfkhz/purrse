@@ -16,13 +16,13 @@ class ComingSoon extends StatelessWidget {
           Container(
             width: 90,
             height: 90,
-            decoration: const BoxDecoration(color: AppColors.softPurple, shape: BoxShape.circle),
+            decoration: BoxDecoration(color: AppColors.softPurple, shape: BoxShape.circle),
             child: Icon(icon, size: 36, color: Theme.of(context).colorScheme.primary),
           ),
-          const SizedBox(height: 16),
-          Text('Halaman $title', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-          const SizedBox(height: 6),
-          const Text('Segera hadir', style: TextStyle(color: AppColors.textGrey)),
+          SizedBox(height: 16),
+          Text('Halaman $title', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+          SizedBox(height: 6),
+          Text('Segera hadir', style: TextStyle(color: AppColors.textGrey)),
         ],
       ),
     );

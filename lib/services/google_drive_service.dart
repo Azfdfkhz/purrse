@@ -127,7 +127,7 @@ class GoogleDriveService {
       await restoreSession();
     }
     if (_account == null) {
-      if (!interactive) throw const DriveAuthRequired();
+      if (!interactive) throw DriveAuthRequired();
       await signIn();
     }
 
@@ -148,7 +148,7 @@ class GoogleDriveService {
     }
 
     // Tanpa dialog: jangan membuka layar izin dari proses latar belakang.
-    if (!interactive) throw const DriveAuthRequired();
+    if (!interactive) throw DriveAuthRequired();
 
     final newAuthorization =
     await _account!.authorizationClient
@@ -376,7 +376,7 @@ class GoogleDriveService {
 
   void _checkAuth(http.Response r) {
     if (r.statusCode == 401 || r.statusCode == 403) {
-      throw const DriveAuthRequired(
+      throw DriveAuthRequired(
         'Izin Google Drive kedaluwarsa atau dicabut. Hubungkan ulang di Pengaturan.',
       );
     }
