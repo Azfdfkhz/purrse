@@ -26,7 +26,7 @@ class BackupService {
   // ============================================================
 
   Future<String> createBackup({
-    String appVersion = '1.0.0',
+    String appVersion = '1.2.1',
   }) async {
     final currentUser =
     await _storage.getCurrentUser();
@@ -240,7 +240,7 @@ class BackupService {
   // ============================================================
 
   Future<void> backupToGoogleDrive({
-    String appVersion = '1.0.0',
+    String appVersion = '1.2.1',
   }) async {
     // Pastikan Google Drive terhubung
     if (!_drive.isSignedIn) {

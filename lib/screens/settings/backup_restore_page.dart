@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../services/proof_upload_service.dart';
+import '../../services/storage_service.dart';
 
 import '../../services/backup_service.dart';
 import '../../services/google_drive_service.dart';
@@ -22,6 +24,10 @@ class _BackupRestorePageState
 
     _connected =
         GoogleDriveService.instance.isSignedIn;
+
+    GoogleDriveService.instance.restoreSession().then((ok) {
+      if (mounted && ok != _connected) setState(() => _connected = ok);
+    });
   }
 
   Future<void> _connectGoogleDrive() async {
@@ -37,6 +43,10 @@ class _BackupRestorePageState
         setState(() {
           _connected = true;
         });
+        final user = await StorageService.instance.getCurrentUser();
+        if (user != null) {
+          ProofUploadService.instance.processPending(user.id);
+        }
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

@@ -74,7 +74,7 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
                         Text(
                           option.name,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 11, color: AppColors.textGrey),
+                          style: const TextStyle(fontSize: 12, color: AppColors.textGrey),
                         ),
                       ],
                     ),

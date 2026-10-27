@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../expense/add_expense_modal.dart';
+import '../../widgets/ui_kit.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../models/category_model.dart';
 import '../../models/expense_model.dart';
@@ -16,10 +18,10 @@ class LaporanScreen extends StatefulWidget {
   const LaporanScreen({super.key});
 
   @override
-  State<LaporanScreen> createState() => _LaporanScreenState();
+  State<LaporanScreen> createState() => LaporanScreenState();
 }
 
-class _LaporanScreenState extends State<LaporanScreen> {
+class LaporanScreenState extends State<LaporanScreen> {
   _ReportMode _mode = _ReportMode.hari;
   _DisplayType _hariDisplay = _DisplayType.calendar;
   _DisplayType _bulanDisplay = _DisplayType.data;
@@ -27,7 +29,16 @@ class _LaporanScreenState extends State<LaporanScreen> {
   int _month = DateTime.now().month;
   int _year = DateTime.now().year;
 
-  DateTime _selectedDay = DateTime.now();
+  DateTime _selectedDay = ExpenseModel.dateOnly(DateTime.now());
+
+  /// Hanya terisi jika pengguna sendiri mengetuk sebuah tanggal.
+  /// Navigasi bulan menghapusnya, jadi tanggal transaksi tidak bergeser diam-diam.
+  DateTime? _pickedDay;
+
+  /// Tanggal awal untuk transaksi baru dari tombol (+): tanggal yang
+  /// dipilih pengguna pada tampilan Hari, atau null (= hari ini).
+  DateTime? get dateForNewExpense =>
+      _mode == _ReportMode.hari ? _pickedDay : null;
 
   UserModel? _user;
   List<ExpenseModel> _allExpenses = [];
@@ -39,6 +50,19 @@ class _LaporanScreenState extends State<LaporanScreen> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  Future<void> reload() => _load();
+
+  Future<void> _addForSelectedDay() async {
+    final added = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black45,
+      builder: (_) => AddExpenseModal(initialDate: _selectedDay),
+    );
+    if (added == true) await _load();
   }
 
   Future<void> _load() async {
@@ -74,6 +98,7 @@ class _LaporanScreenState extends State<LaporanScreen> {
       _month = newMonth;
       _year = newYear;
       _selectedDay = DateTime(_year, _month, 1);
+      _pickedDay = null;
     });
   }
 
@@ -247,6 +272,19 @@ class _LaporanScreenState extends State<LaporanScreen> {
                 ],
               ),
               const SizedBox(height: 14),
+              if (_mode == _ReportMode.hari) ...[
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: _addForSelectedDay,
+                    icon: const Icon(Icons.add_circle_outline_rounded, size: 20),
+                    label: Text(
+                      'Tambah di ${Formatters.date(_selectedDay)}',
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+              ],
               if (_mode == _ReportMode.hari)
                 _DayView(
                   month: _month,
@@ -257,7 +295,10 @@ class _LaporanScreenState extends State<LaporanScreen> {
                   categoryOf: _categoryById,
                   themeColor: themeColor,
                   onDaySelected: (d) {
-                    setState(() => _selectedDay = d);
+                    setState(() {
+                      _selectedDay = ExpenseModel.dateOnly(d);
+                      _pickedDay = _selectedDay;
+                    });
                   },
                 )
               else
@@ -294,13 +335,14 @@ class _Pill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Pressable(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         decoration: BoxDecoration(
           color: color,
           borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: AppColors.ink, width: 1.5),
         ),
         child: Row( // <-- Hilangkan 'const' di sini
           mainAxisSize: MainAxisSize.min,
@@ -420,7 +462,7 @@ class _DayView extends StatelessWidget {
                               e.description.isEmpty ? '-' : e.description,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 11, color: AppColors.textGrey),
+                              style: const TextStyle(fontSize: 12, color: AppColors.textGrey),
                             ),
                           ],
                         ),
@@ -683,13 +725,14 @@ class _MonthView extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: themeColor.withOpacity(0.5), width: 1.5),
+        border: Border.all(color: AppColors.ink, width: 1.5),
       ),
       child: maxValue == 0
           ? const Center(
         child: Text(
-          'Belum ada data pengeluaran tahun ini',
-          style: TextStyle(color: AppColors.textGrey),
+          'Belum ada data pengeluaran tahun ini.\nCatat pengeluaran pertama dengan tombol +.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: AppColors.textGrey, fontSize: 14, height: 1.4),
         ),
       )
           : BarChart(
@@ -710,7 +753,7 @@ class _MonthView extends StatelessWidget {
                   padding: const EdgeInsets.only(left: 4),
                   child: Text(
                     Formatters.rupiah(value),
-                    style: const TextStyle(fontSize: 9, color: AppColors.textDark),
+                    style: const TextStyle(fontSize: 12, color: AppColors.textDark),
                   ),
                 ),
               ),
@@ -727,7 +770,7 @@ class _MonthView extends StatelessWidget {
                     child: Text(
                       Formatters.monthNames[idx - 1].substring(0, 3),
                       style: const TextStyle(
-                        fontSize: 11,
+                        fontSize: 12,
                         color: AppColors.textDark,
                         fontWeight: FontWeight.w600,
                       ),
@@ -747,9 +790,13 @@ class _MonthView extends StatelessWidget {
               barRods: [
                 BarChartRodData(
                   toY: value,
-                  width: 16,
-                  borderRadius: BorderRadius.circular(6),
-                  color: isSelected ? themeColor : themeColor.withOpacity(0.3),
+                  width: 18,
+                  borderRadius: BorderRadius.circular(9),
+                  color: isSelected ? themeColor : themeColor.withOpacity(0.35),
+                  borderSide: BorderSide(
+                    color: AppColors.ink,
+                    width: isSelected ? 2 : 1.2,
+                  ),
                 ),
               ],
             );

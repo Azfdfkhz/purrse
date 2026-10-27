@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/ui_kit.dart';
 import 'register_screen.dart';
 import 'login_screen.dart';
 
@@ -43,28 +44,15 @@ class AuthChoiceScreen extends StatelessWidget {
                 alignment: Alignment.centerLeft,
                 child: Text(
                   'Catat pengeluaranmu dan kelola uangmu dengan lebih mudah.',
-                  style: TextStyle(fontSize: 15, color: AppColors.textGrey, height: 1.4),
+                  style: TextStyle(fontSize: 16, color: AppColors.textGrey, height: 1.4),
                 ),
               ),
               const Spacer(),
               const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                height: 58,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                  ),
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const RegisterScreen()),
-                  ),
-                  child: const Text(
-                    'Mulai Sekarang',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-                  ),
+              InkButton(
+                label: 'Mulai Sekarang',
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const RegisterScreen()),
                 ),
               ),
               const SizedBox(height: 16),
@@ -78,7 +66,7 @@ class AuthChoiceScreen extends StatelessWidget {
                     ),
                     child: Text(
                       'Masuk',
-                      style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700),
+                      style: const TextStyle(color: AppColors.ink, fontWeight: FontWeight.w800, decoration: TextDecoration.underline),
                     ),
                   ),
                 ],

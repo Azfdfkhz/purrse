@@ -8,6 +8,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await GoogleDriveService.instance.initialize();
+  // Pulihkan sesi Drive secara senyap (tanpa memilih akun lagi).
+  GoogleDriveService.instance.restoreSession();
 
   runApp(const FinanceApp());
 }
@@ -32,7 +34,7 @@ class _FinanceAppState extends State<FinanceApp> {
       animation: ThemeController.instance,
       builder: (context, _) {
         return MaterialApp(
-          title: 'Kukukuk',
+          title: 'PurssApp',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light(accent: ThemeController.instance.accentColor),
           home: const SplashScreen(),

@@ -1,14 +1,44 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import '../../models/category_model.dart';
 import '../../models/expense_model.dart';
+import '../../services/proof_upload_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/formatters.dart';
+import '../../widgets/ui_kit.dart';
+
+/// Memformat angka dengan pemisah ribuan titik (1.250.000) saat mengetik.
+class _ThousandsFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue old, TextEditingValue next) {
+    final digits = next.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) return const TextEditingValue();
+    final trimmed = digits.replaceFirst(RegExp(r'^0+(?=\d)'), '');
+    final buf = StringBuffer();
+    for (var i = 0; i < trimmed.length; i++) {
+      if (i > 0 && (trimmed.length - i) % 3 == 0) buf.write('.');
+      buf.write(trimmed[i]);
+    }
+    final text = buf.toString();
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+}
 
 class AddExpenseModal extends StatefulWidget {
-  const AddExpenseModal({super.key});
+  /// Tanggal awal formulir (mis. tanggal yang dipilih di kalender).
+  /// Jika null, memakai hari ini.
+  final DateTime? initialDate;
+
+  /// Jika diisi, formulir berada dalam mode edit.
+  final ExpenseModel? expense;
+
+  const AddExpenseModal({super.key, this.initialDate, this.expense});
 
   @override
   State<AddExpenseModal> createState() => _AddExpenseModalState();
@@ -17,7 +47,9 @@ class AddExpenseModal extends StatefulWidget {
 class _AddExpenseModalState extends State<AddExpenseModal> {
   final _amountController = TextEditingController();
   final _descController = TextEditingController();
-  DateTime _date = DateTime.now();
+  late DateTime _date;
+  bool get _isEdit => widget.expense != null;
+  static const double _maxAmount = 9999999999999;
   String? _selectedCategoryId;
   String? _proofPath;
   List<CategoryModel> _categories = [];
@@ -28,6 +60,15 @@ class _AddExpenseModalState extends State<AddExpenseModal> {
   @override
   void initState() {
     super.initState();
+    final edit = widget.expense;
+    _date = ExpenseModel.dateOnly(
+      edit?.date ?? widget.initialDate ?? DateTime.now(),
+    );
+    if (edit != null) {
+      _amountController.text = Formatters.digitsWithDots(edit.amount);
+      _descController.text = edit.description;
+      _proofPath = edit.proofPath;
+    }
     _load();
   }
 
@@ -38,7 +79,10 @@ class _AddExpenseModalState extends State<AddExpenseModal> {
     setState(() {
       _userId = user.id;
       _categories = cats;
-      _selectedCategoryId = cats.isNotEmpty ? cats.first.id : null;
+      final editCat = widget.expense?.categoryId;
+      _selectedCategoryId = (editCat != null && cats.any((c) => c.id == editCat))
+          ? editCat
+          : (cats.isNotEmpty ? cats.first.id : null);
       _loading = false;
     });
   }
@@ -50,7 +94,7 @@ class _AddExpenseModalState extends State<AddExpenseModal> {
       firstDate: DateTime(2020),
       lastDate: DateTime(2100),
     );
-    if (picked != null) setState(() => _date = picked);
+    if (picked != null) setState(() => _date = ExpenseModel.dateOnly(picked));
   }
 
   Future<void> _pickImage() async {
@@ -86,27 +130,71 @@ class _AddExpenseModalState extends State<AddExpenseModal> {
     }
   }
 
+  void _toast(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
   Future<void> _save() async {
-    final amount = double.tryParse(_amountController.text.replaceAll('.', '').replaceAll(',', '.'));
-    if (amount == null || amount <= 0 || _selectedCategoryId == null || _userId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lengkapi jumlah dan kategori terlebih dahulu')),
-      );
+    if (_saving) return;
+    // Rupiah tidak memakai desimal: hanya digit yang diterima.
+    final digits = _amountController.text.replaceAll(RegExp(r'[^0-9]'), '');
+    final amount = digits.isEmpty ? null : double.tryParse(digits);
+    if (amount == null || amount <= 0) {
+      _toast('Jumlah harus lebih dari 0');
+      return;
+    }
+    if (amount > _maxAmount) {
+      _toast('Jumlah terlalu besar');
+      return;
+    }
+    if (_selectedCategoryId == null || _userId == null) {
+      _toast('Pilih kategori terlebih dahulu');
       return;
     }
     setState(() => _saving = true);
-    final expense = ExpenseModel(
-      id: const Uuid().v4(),
-      userId: _userId!,
-      categoryId: _selectedCategoryId!,
-      amount: amount,
-      date: _date,
-      description: _descController.text.trim(),
-      proofPath: _proofPath,
-    );
-    await StorageService.instance.addExpense(expense);
-    if (!mounted) return;
-    Navigator.pop(context, true);
+    try {
+      final old = widget.expense;
+      final proofChanged = old == null || old.proofPath != _proofPath;
+      final String savedId;
+      if (old == null) {
+        final expense = ExpenseModel(
+          id: const Uuid().v4(),
+          userId: _userId!,
+          categoryId: _selectedCategoryId!,
+          amount: amount,
+          date: _date,
+          description: _descController.text.trim(),
+          proofPath: _proofPath,
+        );
+        await StorageService.instance.addExpense(expense);
+        savedId = expense.id;
+      } else {
+        await StorageService.instance.updateExpense(
+          old.copyWith(
+            categoryId: _selectedCategoryId,
+            amount: amount,
+            date: _date,
+            description: _descController.text.trim(),
+            proofPath: _proofPath,
+            clearProof: _proofPath == null,
+            // Foto diganti -> upload ulang; foto sama -> status dipertahankan.
+            clearDriveFileId: proofChanged,
+          ),
+        );
+        savedId = old.id;
+      }
+      // Transaksi sudah tersimpan. Upload foto berjalan terpisah:
+      // kegagalan upload tidak membatalkan penyimpanan transaksi.
+      if (_proofPath != null && proofChanged) {
+        await ProofUploadService.instance.enqueue(_userId!, savedId);
+      }
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      _toast('Gagal menyimpan transaksi. Coba lagi.');
+    }
   }
 
   @override
@@ -123,9 +211,9 @@ class _AddExpenseModalState extends State<AddExpenseModal> {
               child: TextButton.icon(
                 onPressed: () => Navigator.pop(context, false),
                 style: TextButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  backgroundColor: AppColors.ink,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  shape: const StadiumBorder(),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 ),
                 icon: const Icon(Icons.arrow_back_rounded, size: 18),
@@ -139,7 +227,8 @@ class _AddExpenseModalState extends State<AddExpenseModal> {
             padding: const EdgeInsets.fromLTRB(22, 24, 22, 24),
             decoration: const BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+              border: Border(top: BorderSide(color: AppColors.ink, width: 2)),
             ),
             child: _loading
                 ? Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary))
@@ -147,19 +236,26 @@ class _AddExpenseModalState extends State<AddExpenseModal> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Jumlah Pengeluaran:', style: TextStyle(fontWeight: FontWeight.w700)),
+                        Text(_isEdit ? 'Edit Pengeluaran' : 'Jumlah Pengeluaran:', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
                         const SizedBox(height: 8),
                         TextField(
                           controller: _amountController,
                           keyboardType: TextInputType.number,
+                          inputFormatters: [_ThousandsFormatter()],
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
                           decoration: InputDecoration(
+                            prefixText: 'Rp ',
                             hintText: '0',
                             filled: true,
                             fillColor: AppColors.background,
                             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              borderSide: const BorderSide(color: AppColors.cardBorder),
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: const BorderSide(color: AppColors.ink, width: 1.5),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: const BorderSide(color: AppColors.ink, width: 1.5),
                             ),
                           ),
                         ),
@@ -176,18 +272,22 @@ class _AddExpenseModalState extends State<AddExpenseModal> {
                                 onTap: () => setState(() => _selectedCategoryId = c.id),
                                 child: Column(
                                   children: [
-                                    Container(
-                                      width: 46,
-                                      height: 46,
+                                    AnimatedContainer(
+                                      duration: motion(context, 180),
+                                      width: 52,
+                                      height: 52,
                                       decoration: BoxDecoration(
                                         color: c.color,
-                                        borderRadius: BorderRadius.circular(14),
-                                        border: selected ? Border.all(color: AppColors.textDark, width: 2) : null,
+                                        borderRadius: BorderRadius.circular(18),
+                                        border: Border.all(
+                                          color: AppColors.ink,
+                                          width: selected ? 2.5 : 1,
+                                        ),
                                       ),
-                                      child: Icon(c.icon, color: Colors.white, size: 20),
+                                      child: Icon(c.icon, color: AppColors.ink, size: 22),
                                     ),
                                     const SizedBox(height: 4),
-                                    Text(c.name, style: const TextStyle(fontSize: 10)),
+                                    Text(c.name, style: const TextStyle(fontSize: 12)),
                                   ],
                                 ),
                               );
@@ -195,11 +295,11 @@ class _AddExpenseModalState extends State<AddExpenseModal> {
                             GestureDetector(
                               onTap: _addCategoryDialog,
                               child: Container(
-                                width: 46,
-                                height: 46,
+                                width: 52,
+                                height: 52,
                                 decoration: BoxDecoration(
                                   color: AppColors.background,
-                                  borderRadius: BorderRadius.circular(14),
+                                  borderRadius: BorderRadius.circular(18),
                                   border: Border.all(color: AppColors.cardBorder),
                                 ),
                                 child: const Icon(Icons.add_rounded, color: AppColors.textGrey),
@@ -228,7 +328,7 @@ class _AddExpenseModalState extends State<AddExpenseModal> {
                                       child: Row(
                                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
-                                          Text(Formatters.date(_date), style: const TextStyle(fontSize: 13)),
+                                          Text(Formatters.date(_date), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                                           const Icon(Icons.calendar_today_rounded, size: 16, color: AppColors.textGrey),
                                         ],
                                       ),
@@ -247,7 +347,7 @@ class _AddExpenseModalState extends State<AddExpenseModal> {
                                   TextField(
                                     controller: _descController,
                                     decoration: InputDecoration(
-                                      hintText: 'sesuaikan',
+                                      hintText: 'Catatan',
                                       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
                                       border: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(14),
@@ -275,8 +375,8 @@ class _AddExpenseModalState extends State<AddExpenseModal> {
                                     border: Border.all(color: AppColors.cardBorder),
                                   ),
                                   child: Text(
-                                    _proofPath == null ? 'upload foto' : 'Foto dipilih',
-                                    style: const TextStyle(fontSize: 13, color: AppColors.textGrey),
+                                    _proofPath == null ? 'upload foto' : 'Foto dipilih (ketuk untuk ganti)',
+                                    style: const TextStyle(fontSize: 14, color: AppColors.textGrey),
                                   ),
                                 ),
                               ),
@@ -284,11 +384,12 @@ class _AddExpenseModalState extends State<AddExpenseModal> {
                             const SizedBox(width: 12),
                             ElevatedButton(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Theme.of(context).colorScheme.primary,
+                                backgroundColor: AppColors.ink,
                                 foregroundColor: Colors.white,
                                 elevation: 0,
+                                minimumSize: const Size(110, 54),
                                 padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 16),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                shape: const StadiumBorder(),
                               ),
                               onPressed: _saving ? null : _save,
                               child: _saving
@@ -297,7 +398,7 @@ class _AddExpenseModalState extends State<AddExpenseModal> {
                                       height: 18,
                                       child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                                     )
-                                  : const Text('Simpan', style: TextStyle(fontWeight: FontWeight.w700)),
+                                  : Text(_isEdit ? 'Perbarui' : 'Simpan', style: const TextStyle(fontWeight: FontWeight.w700)),
                             ),
                           ],
                         ),

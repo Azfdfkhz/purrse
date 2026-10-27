@@ -104,7 +104,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
         title: const Text('Kategori Pengeluaran', style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.w800)),
       ),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: Theme.of(context).colorScheme.primary,
+        backgroundColor: AppColors.ink,
         onPressed: () => _openEditor(),
         child: const Icon(Icons.add_rounded, color: Colors.white),
       ),
@@ -253,7 +253,7 @@ class _CategoryEditorSheetState extends State<_CategoryEditorSheet> {
               height: 52,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  backgroundColor: AppColors.ink,
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),

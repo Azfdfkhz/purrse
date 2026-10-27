@@ -24,7 +24,7 @@ class AppTextField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.textDark)),
+        Text(label, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.textDark)),
         const SizedBox(height: 8),
         TextField(
           controller: controller,
@@ -41,12 +41,12 @@ class AppTextField extends StatelessWidget {
               borderSide: const BorderSide(color: AppColors.cardBorder),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: AppColors.cardBorder),
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: AppColors.ink, width: 1.2),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: AppColors.ink, width: 2),
             ),
           ),
         ),

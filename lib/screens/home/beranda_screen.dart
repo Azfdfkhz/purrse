@@ -8,6 +8,7 @@ import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/theme_controller.dart';
 import '../../utils/formatters.dart';
+import '../../widgets/ui_kit.dart';
 
 class BerandaScreen extends StatefulWidget {
   final VoidCallback? onNavigateToLaporan;
@@ -122,13 +123,14 @@ class BerandaScreenState extends State<BerandaScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      'Halo, ${_user!.username}',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 22),
+                      'Halo, ${_user!.username} 👋',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 24),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   IconButton(
                     onPressed: () {},
+                    tooltip: 'Notifikasi',
                     icon: const Icon(
                       Icons.notifications_none_rounded,
                       color: AppColors.textDark,
@@ -136,8 +138,11 @@ class BerandaScreenState extends State<BerandaScreen> {
                     ),
                   ),
                   CircleAvatar(
+                    radius: 24,
+                    backgroundColor: AppColors.ink,
+                    child: CircleAvatar(
                     radius: 22,
-                    backgroundColor: themeColor.withOpacity(0.25),
+                    backgroundColor: themeColor,
                     backgroundImage: (_user?.avatarPath != null && _user!.avatarPath!.isNotEmpty)
                         ? FileImage(File(_user!.avatarPath!))
                         : null,
@@ -145,12 +150,14 @@ class BerandaScreenState extends State<BerandaScreen> {
                         ? const Icon(Icons.person, color: AppColors.textDark)
                         : null,
                   ),
+                  ),
                 ],
               ),
               const SizedBox(height: 16),
 
               // Card Saldo/Pengeluaran
-              _BalanceCard(
+              FadeSlideIn(child: _BalanceCard(
+                count: _monthExpenses.length,
                 total: _total,
                 month: _month,
                 color: themeColor,
@@ -160,12 +167,12 @@ class BerandaScreenState extends State<BerandaScreen> {
                     widget.onNavigateToLaporan!();
                   }
                 },
-              ),
+              )),
               const SizedBox(height: 14),
 
               // Donut Chart & Legenda
               SizedBox(
-                height: 180,
+                height: 170,
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -209,6 +216,7 @@ class BerandaScreenState extends State<BerandaScreen> {
 class _BalanceCard extends StatelessWidget {
   final double total;
   final int month;
+  final int count;
   final Color color;
   final VoidCallback onMonthTap;
   final VoidCallback onSummaryTap;
@@ -216,6 +224,7 @@ class _BalanceCard extends StatelessWidget {
   const _BalanceCard({
     required this.total,
     required this.month,
+    required this.count,
     required this.color,
     required this.onMonthTap,
     required this.onSummaryTap,
@@ -223,83 +232,105 @@ class _BalanceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(30)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(30),
+      child: Stack(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Pengeluaran Bulan ini',
-                style: TextStyle(color: AppColors.textDark, fontSize: 15, fontWeight: FontWeight.w600),
-              ),
-              GestureDetector(
-                onTap: onMonthTap,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppColors.cardBorder),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        Formatters.monthNames[month - 1],
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
+            color: AppColors.ink,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Flexible(
+                      child: Text(
+                        'Pengeluaran bulan ini',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w600),
                       ),
-                      const SizedBox(width: 4),
-                      const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
-                    ],
+                    ),
+                    Pressable(
+                      onTap: onMonthTap,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: color,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              Formatters.monthNames[month - 1],
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.ink),
+                            ),
+                            const SizedBox(width: 2),
+                            const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: AppColors.ink),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    Formatters.rupiah(total),
+                    style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: Colors.white),
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            Formatters.rupiah(total),
-            style: const TextStyle(
-              fontSize: 30,
-              fontWeight: FontWeight.w800,
-              color: AppColors.textDark,
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Pressable(
+                      onTap: onSummaryTap,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(22),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Lihat ringkasan',
+                              style: TextStyle(color: AppColors.ink, fontWeight: FontWeight.w800, fontSize: 13),
+                            ),
+                            SizedBox(width: 4),
+                            Icon(Icons.arrow_forward_rounded, color: AppColors.ink, size: 16),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Flexible(
+                      child: Text(
+                        '$count transaksi',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 16),
-          GestureDetector(
-            onTap: onSummaryTap,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: AppColors.textDark.withOpacity(0.2),
-                ),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Lihat ringkasan',
-                    style: TextStyle(
-                      color: AppColors.textDark,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                    ),
-                  ),
-                  SizedBox(width: 4),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    color: AppColors.textDark,
-                    size: 18,
-                  ),
-                ],
+          // Dekorasi lembut berwarna aksen (mengikuti pilihan warna pengguna)
+          Positioned(
+            right: -34,
+            top: -34,
+            child: IgnorePointer(
+              child: Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(color: color.withOpacity(0.18), shape: BoxShape.circle),
               ),
             ),
           ),
@@ -356,7 +387,7 @@ class _DonutCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.cardBorder),
+        border: Border.all(color: AppColors.ink, width: 1.5),
       ),
       child: Stack(
         alignment: Alignment.center,
@@ -384,7 +415,7 @@ class _DonutCard extends StatelessWidget {
               ),
               Text(
                 '$year',
-                style: const TextStyle(fontSize: 11, color: AppColors.textGrey),
+                style: const TextStyle(fontSize: 12, color: AppColors.textGrey),
               ),
             ],
           ),
@@ -408,7 +439,7 @@ class _LegendCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.cardBorder),
+        border: Border.all(color: AppColors.ink, width: 1.5),
       ),
       child: entries.isEmpty
           ? const Center(
@@ -452,7 +483,7 @@ class _LegendCard extends StatelessWidget {
                     Text(
                       Formatters.rupiah(value),
                       style: const TextStyle(
-                        fontSize: 11,
+                        fontSize: 12,
                         color: AppColors.textGrey,
                       ),
                     ),
@@ -486,7 +517,7 @@ class _RecentExpensesCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.cardBorder),
+        border: Border.all(color: AppColors.ink, width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -500,8 +531,9 @@ class _RecentExpensesCard extends StatelessWidget {
             child: expenses.isEmpty
                 ? const Center(
               child: Text(
-                'Belum ada pengeluaran bulan ini',
-                style: TextStyle(color: AppColors.textGrey, fontSize: 13),
+                'Belum ada pengeluaran bulan ini.\nKetuk tombol + untuk mencatat.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.textGrey, fontSize: 14, height: 1.4),
               ),
             )
                 : ListView.separated(
@@ -513,8 +545,9 @@ class _RecentExpensesCard extends StatelessWidget {
                 return Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: themeColor.withOpacity(0.18),
-                    borderRadius: BorderRadius.circular(16),
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: AppColors.cardBorder),
                   ),
                   child: Row(
                     children: [
@@ -524,10 +557,11 @@ class _RecentExpensesCard extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: (cat?.color ?? AppColors.softCoral),
                           shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.ink, width: 1.5),
                         ),
                         child: Icon(
                           cat?.icon ?? Icons.category_rounded,
-                          color: Colors.white,
+                          color: AppColors.ink,
                           size: 20,
                         ),
                       ),
@@ -548,7 +582,7 @@ class _RecentExpensesCard extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
-                                fontSize: 11,
+                                fontSize: 12,
                                 color: AppColors.textGrey,
                               ),
                             ),
@@ -561,7 +595,7 @@ class _RecentExpensesCard extends StatelessWidget {
                           Text(
                             Formatters.date(e.date),
                             style: const TextStyle(
-                              fontSize: 10,
+                              fontSize: 12,
                               color: AppColors.textGrey,
                             ),
                           ),
@@ -570,7 +604,7 @@ class _RecentExpensesCard extends StatelessWidget {
                             Formatters.rupiah(e.amount),
                             style: const TextStyle(
                               fontWeight: FontWeight.w800,
-                              fontSize: 13,
+                              fontSize: 14,
                             ),
                           ),
                         ],

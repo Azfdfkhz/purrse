@@ -2,22 +2,50 @@ class UserModel {
   final String id;
   final String username;
   final String email;
-  final String password; // demo only - simple local storage, not secure
+
+  /// Hash PBKDF2-HMAC-SHA256 (base64) + salt (base64).
+  final String? passwordHash;
+  final String? passwordSalt;
+
+  /// HANYA untuk data lama (versi <= 1.1.0) yang masih teks biasa.
+  /// Dihapus otomatis saat user berhasil login pertama kali di 1.2.0.
+  final String? legacyPassword;
   final String? avatarPath;
 
   UserModel({
     required this.id,
     required this.username,
     required this.email,
-    required this.password,
+    this.passwordHash,
+    this.passwordSalt,
+    this.legacyPassword,
     this.avatarPath,
   });
+
+  UserModel copyWith({
+    String? username,
+    String? avatarPath,
+    String? passwordHash,
+    String? passwordSalt,
+    bool clearLegacyPassword = false,
+  }) =>
+      UserModel(
+        id: id,
+        username: username ?? this.username,
+        email: email,
+        passwordHash: passwordHash ?? this.passwordHash,
+        passwordSalt: passwordSalt ?? this.passwordSalt,
+        legacyPassword: clearLegacyPassword ? null : legacyPassword,
+        avatarPath: avatarPath ?? this.avatarPath,
+      );
 
   Map<String, dynamic> toJson() => {
         'id': id,
         'username': username,
         'email': email,
-        'password': password,
+        'passwordHash': passwordHash,
+        'passwordSalt': passwordSalt,
+        if (legacyPassword != null) 'password': legacyPassword,
         'avatarPath': avatarPath,
       };
 
@@ -25,7 +53,9 @@ class UserModel {
         id: json['id'],
         username: json['username'],
         email: json['email'],
-        password: json['password'],
+        passwordHash: json['passwordHash'],
+        passwordSalt: json['passwordSalt'],
+        legacyPassword: json['password'],
         avatarPath: json['avatarPath'],
       );
 }

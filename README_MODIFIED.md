@@ -31,3 +31,9 @@ flutter clean
 flutter pub get
 flutter run
 ```
+
+## Update 1.2.0
+Lihat `docs/UPDATE_1_2_0_STATUS.md` untuk daftar yang sudah/belum dikerjakan dan `docs/supabase_schema.sql` untuk rancangan skema cloud.
+
+## Update 1.2.1 (UI)
+Lihat `docs/UPDATE_1_2_1_UI_STATUS.md`.

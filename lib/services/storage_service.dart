@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -5,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../models/user_model.dart';
 import '../models/expense_model.dart';
 import '../models/category_model.dart';
+import '../utils/password_hasher.dart';
 
 /// Semua data disimpan secara lokal di memori HP menggunakan
 /// SharedPreferences (tanpa server / internet).
@@ -18,6 +20,21 @@ class StorageService {
   static const _kCategoriesPrefix = 'categories_';
 
   final _uuid = const Uuid();
+
+  // Antrean serial: semua operasi baca-ubah-tulis berjalan satu per satu
+  // sehingga dua penyimpanan bersamaan tidak saling menimpa (lost update).
+  Future<void> _tail = Future.value();
+  Future<T> _serial<T>(Future<T> Function() action) {
+    final completer = Completer<T>();
+    _tail = _tail.then((_) async {
+      try {
+        completer.complete(await action());
+      } catch (e, st) {
+        completer.completeError(e, st);
+      }
+    });
+    return completer.future;
+  }
 
   Future<SharedPreferences> get _prefs async => SharedPreferences.getInstance();
 
@@ -45,11 +62,13 @@ class StorageService {
     final exists = users.any((u) => u.email.toLowerCase() == email.toLowerCase());
     if (exists) return 'Email sudah terdaftar';
 
+    final salt = PasswordHasher.generateSalt();
     final newUser = UserModel(
       id: _uuid.v4(),
       username: username,
       email: email,
-      password: password,
+      passwordSalt: salt,
+      passwordHash: PasswordHasher.hash(password, salt),
     );
     users.add(newUser);
     await _saveUsers(users);
@@ -60,11 +79,26 @@ class StorageService {
 
   Future<String?> login({required String email, required String password}) async {
     final users = await _loadUsers();
-    final match = users.where(
-      (u) => u.email.toLowerCase() == email.toLowerCase() && u.password == password,
-    );
-    if (match.isEmpty) return 'Email atau password salah';
-    await _setCurrentUser(match.first.id);
+    final idx = users.indexWhere((u) => u.email.toLowerCase() == email.toLowerCase());
+    if (idx == -1) return 'Email atau password salah';
+    final user = users[idx];
+
+    var ok = false;
+    if (user.passwordHash != null && user.passwordSalt != null) {
+      ok = PasswordHasher.verify(password, user.passwordSalt!, user.passwordHash!);
+    } else if (user.legacyPassword != null && user.legacyPassword == password) {
+      // Migrasi otomatis dari password teks biasa (<= 1.1.0) ke hash.
+      final salt = PasswordHasher.generateSalt();
+      users[idx] = user.copyWith(
+        passwordSalt: salt,
+        passwordHash: PasswordHasher.hash(password, salt),
+        clearLegacyPassword: true,
+      );
+      await _saveUsers(users);
+      ok = true;
+    }
+    if (!ok) return 'Email atau password salah';
+    await _setCurrentUser(user.id);
     return null;
   }
 
@@ -129,34 +163,99 @@ class StorageService {
   }
 
   // ---------- Expenses ----------
-  Future<List<ExpenseModel>> getExpenses(String userId) async {
+  Future<List<ExpenseModel>> _loadAllExpenses(String userId) async {
     final prefs = await _prefs;
     final raw = prefs.getString('$_kExpensesPrefix$userId');
     if (raw == null) return [];
     final list = jsonDecode(raw) as List;
-    final expenses = list.map((e) => ExpenseModel.fromJson(e)).toList();
-    expenses.sort((a, b) => b.date.compareTo(a.date));
+    final out = <ExpenseModel>[];
+    for (final e in list) {
+      try {
+        out.add(ExpenseModel.fromJson(Map<String, dynamic>.from(e as Map)));
+      } catch (_) {
+        // Satu data rusak tidak boleh membuat seluruh daftar hilang.
+      }
+    }
+    return out;
+  }
+
+  Future<void> _saveAllExpenses(String userId, List<ExpenseModel> all) async {
+    final prefs = await _prefs;
+    final ok = await prefs.setString(
+      '$_kExpensesPrefix$userId',
+      jsonEncode(all.map((e) => e.toJson()).toList()),
+    );
+    if (!ok) throw Exception('Gagal menyimpan data transaksi.');
+  }
+
+  /// Transaksi aktif (tanpa yang sudah dihapus), terbaru di atas.
+  Future<List<ExpenseModel>> getExpenses(String userId) async {
+    final all = await _loadAllExpenses(userId);
+    final expenses = all.where((e) => !e.isDeleted).toList();
+    expenses.sort((a, b) {
+      final c = b.date.compareTo(a.date);
+      return c != 0 ? c : b.createdAt.compareTo(a.createdAt);
+    });
     return expenses;
   }
 
-  Future<void> addExpense(ExpenseModel expense) async {
-    final expenses = await getExpenses(expense.userId);
-    expenses.add(expense);
-    final prefs = await _prefs;
-    await prefs.setString(
-      '$_kExpensesPrefix${expense.userId}',
-      jsonEncode(expenses.map((e) => e.toJson()).toList()),
+  Future<void> addExpense(ExpenseModel expense) => _serial(() async {
+        final all = await _loadAllExpenses(expense.userId);
+        // Idempoten: ID yang sama tidak akan dobel.
+        all.removeWhere((e) => e.id == expense.id);
+        all.add(expense);
+        await _saveAllExpenses(expense.userId, all);
+      });
+
+  /// Ubah satu transaksi. [change] menerima data terbaru dan
+  /// mengembalikan versi baru. Mengembalikan null jika tidak ditemukan.
+  Future<ExpenseModel?> mutateExpense(
+    String userId,
+    String expenseId,
+    ExpenseModel Function(ExpenseModel current) change,
+  ) =>
+      _serial(() async {
+        final all = await _loadAllExpenses(userId);
+        final idx = all.indexWhere((e) => e.id == expenseId);
+        if (idx == -1) return null;
+        final updated = change(all[idx]);
+        all[idx] = updated;
+        await _saveAllExpenses(userId, all);
+        return updated;
+      });
+
+  /// Edit oleh pengguna: updatedAt diperbarui, perlu disinkronkan ulang.
+  Future<void> updateExpense(ExpenseModel expense) async {
+    await mutateExpense(
+      expense.userId,
+      expense.id,
+      (_) => expense.copyWith(
+        updatedAt: DateTime.now().toUtc(),
+        syncState: SyncState.pending,
+      ),
     );
   }
 
+  /// Hapus lunak (tombstone) agar penghapusan dapat disinkronkan.
   Future<void> deleteExpense(String userId, String expenseId) async {
-    final expenses = await getExpenses(userId);
-    expenses.removeWhere((e) => e.id == expenseId);
-    final prefs = await _prefs;
-    await prefs.setString(
-      '$_kExpensesPrefix$userId',
-      jsonEncode(expenses.map((e) => e.toJson()).toList()),
+    await mutateExpense(
+      userId,
+      expenseId,
+      (e) => e.copyWith(
+        deletedAt: DateTime.now().toUtc(),
+        updatedAt: DateTime.now().toUtc(),
+        syncState: SyncState.pending,
+      ),
     );
+  }
+
+  /// Transaksi yang foto buktinya belum terunggah.
+  Future<List<ExpenseModel>> getUploadCandidates(String userId) async {
+    final all = await getExpenses(userId);
+    return all.where((e) {
+      if (!e.hasProof) return false;
+      return e.uploadStatus != UploadStatus.uploaded;
+    }).toList();
   }
 
   List<ExpenseModel> filterByMonth(List<ExpenseModel> all, int month, int year) {
@@ -198,14 +297,7 @@ class StorageService {
     final users = await _loadUsers();
     final idx = users.indexWhere((u) => u.id == userId);
     if (idx == -1) return 'User tidak ditemukan';
-    final current = users[idx];
-    users[idx] = UserModel(
-      id: current.id,
-      username: username ?? current.username,
-      email: current.email,
-      password: current.password,
-      avatarPath: avatarPath ?? current.avatarPath,
-    );
+    users[idx] = users[idx].copyWith(username: username, avatarPath: avatarPath);
     await _saveUsers(users);
     return null;
   }
@@ -218,14 +310,16 @@ class StorageService {
     final users = await _loadUsers();
     final idx = users.indexWhere((u) => u.id == userId);
     if (idx == -1) return 'User tidak ditemukan';
-    if (users[idx].password != oldPassword) return 'Password lama salah';
-    final current = users[idx];
-    users[idx] = UserModel(
-      id: current.id,
-      username: current.username,
-      email: current.email,
-      password: newPassword,
-      avatarPath: current.avatarPath,
+    final u = users[idx];
+    final oldOk = (u.passwordHash != null && u.passwordSalt != null)
+        ? PasswordHasher.verify(oldPassword, u.passwordSalt!, u.passwordHash!)
+        : (u.legacyPassword != null && u.legacyPassword == oldPassword);
+    if (!oldOk) return 'Password lama salah';
+    final salt = PasswordHasher.generateSalt();
+    users[idx] = u.copyWith(
+      passwordSalt: salt,
+      passwordHash: PasswordHasher.hash(newPassword, salt),
+      clearLegacyPassword: true,
     );
     await _saveUsers(users);
     return null;
@@ -268,16 +362,24 @@ class StorageService {
   // ---------- Backup / Restore ----------
 
   Future<void> replaceExpensesFromBackup(
-      String userId,
-      List<Map<String, dynamic>> expenses,
-      ) async {
-    final prefs = await _prefs;
-
-    await prefs.setString(
-      '$_kExpensesPrefix$userId',
-      jsonEncode(expenses),
-    );
-  }
+    String userId,
+    List<Map<String, dynamic>> expenses,
+  ) =>
+      _serial(() async {
+        // Validasi & normalisasi sebelum menimpa data lama. ID unik,
+        // jadi file backup yang berisi duplikat tidak membuat transaksi ganda.
+        final byId = <String, ExpenseModel>{};
+        for (final json in expenses) {
+          try {
+            final e = ExpenseModel.fromJson(Map<String, dynamic>.from(json));
+            byId[e.id] = e;
+          } catch (_) {}
+        }
+        if (expenses.isNotEmpty && byId.isEmpty) {
+          throw const FormatException('Isi backup tidak valid, data tidak diubah.');
+        }
+        await _saveAllExpenses(userId, byId.values.toList());
+      });
 
   Future<void> replaceCategoriesFromBackup(
       String userId,

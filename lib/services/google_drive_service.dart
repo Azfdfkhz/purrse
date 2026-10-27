@@ -3,6 +3,16 @@ import 'dart:typed_data';
 
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+
+/// Dilempar saat Drive belum terhubung / izin kedaluwarsa / dicabut.
+/// Pengguna perlu menghubungkan ulang secara manual.
+class DriveAuthRequired implements Exception {
+  final String message;
+  const DriveAuthRequired([this.message = 'Google Drive perlu dihubungkan ulang.']);
+  @override
+  String toString() => message;
+}
 
 class GoogleDriveService {
   GoogleDriveService._();
@@ -52,8 +62,41 @@ class GoogleDriveService {
     await GoogleSignIn.instance.authenticate();
 
     _account = account;
+    await _setConnectedFlag(true);
 
     return account;
+  }
+
+  // ============================================================
+  // SESI TERSIMPAN (tidak perlu pilih akun lagi tiap buka aplikasi)
+  // ============================================================
+
+  static const String _kConnectedFlag = 'drive_connected';
+
+  Future<void> _setConnectedFlag(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kConnectedFlag, value);
+  }
+
+  /// True jika pengguna pernah menghubungkan Drive dan belum memutusnya.
+  Future<bool> wasConnected() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_kConnectedFlag) ?? false;
+  }
+
+  /// Pulihkan sesi secara senyap (tanpa dialog). Aman dipanggil berulang.
+  Future<bool> restoreSession() async {
+    if (_account != null) return true;
+    if (!await wasConnected()) return false;
+    try {
+      final account =
+          await GoogleSignIn.instance.attemptLightweightAuthentication();
+      if (account == null) return false;
+      _account = account;
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   // ============================================================
@@ -64,6 +107,7 @@ class GoogleDriveService {
     await GoogleSignIn.instance.signOut();
 
     _account = null;
+    await _setConnectedFlag(false);
   }
 
   // ============================================================
@@ -78,8 +122,12 @@ class GoogleDriveService {
   // ACCESS TOKEN
   // ============================================================
 
-  Future<String> getAccessToken() async {
+  Future<String> getAccessToken({bool interactive = true}) async {
+    if (_account == null && !interactive) {
+      await restoreSession();
+    }
     if (_account == null) {
+      if (!interactive) throw const DriveAuthRequired();
       await signIn();
     }
 
@@ -98,6 +146,9 @@ class GoogleDriveService {
     if (authorization != null) {
       return authorization.accessToken;
     }
+
+    // Tanpa dialog: jangan membuka layar izin dari proses latar belakang.
+    if (!interactive) throw const DriveAuthRequired();
 
     final newAuthorization =
     await _account!.authorizationClient
@@ -315,6 +366,110 @@ class GoogleDriveService {
     }
 
     return response.body;
+  }
+
+  // ============================================================
+  // FOTO BUKTI TRANSAKSI
+  // ============================================================
+
+  static const String proofIdProperty = 'purrseExpenseId';
+
+  void _checkAuth(http.Response r) {
+    if (r.statusCode == 401 || r.statusCode == 403) {
+      throw const DriveAuthRequired(
+        'Izin Google Drive kedaluwarsa atau dicabut. Hubungkan ulang di Pengaturan.',
+      );
+    }
+  }
+
+  String _mimeFor(String path) {
+    final p = path.toLowerCase();
+    if (p.endsWith('.png')) return 'image/png';
+    if (p.endsWith('.webp')) return 'image/webp';
+    if (p.endsWith('.gif')) return 'image/gif';
+    if (p.endsWith('.heic')) return 'image/heic';
+    return 'image/jpeg';
+  }
+
+  /// Cari file bukti yang sudah ada untuk transaksi ini (anti duplikat).
+  Future<String?> findProofFile(String expenseId, {required String token}) async {
+    final uri = Uri.parse(driveFilesUrl).replace(queryParameters: {
+      'q': "appProperties has { key='$proofIdProperty' and value='$expenseId' } "
+          'and trashed = false',
+      'spaces': 'drive',
+      'fields': 'files(id)',
+      'pageSize': '1',
+    });
+    final r = await http.get(uri, headers: {'Authorization': 'Bearer $token'});
+    _checkAuth(r);
+    if (r.statusCode != 200) {
+      throw Exception('Gagal memeriksa file bukti: ${r.statusCode}');
+    }
+    final files = (jsonDecode(r.body) as Map<String, dynamic>)['files'] as List? ?? [];
+    return files.isEmpty ? null : files.first['id']?.toString();
+  }
+
+  /// Unggah foto bukti. Idempoten: jika sudah ada file dengan ID transaksi
+  /// yang sama di Drive, ID file itu yang dikembalikan (tidak diunggah ulang).
+  /// File bersifat pribadi (tidak dibagikan lewat tautan publik).
+  /// Berhasil HANYA jika Drive mengembalikan ID file.
+  Future<String> uploadProof({
+    required String expenseId,
+    required Uint8List bytes,
+    required String localPath,
+  }) async {
+    final token = await getAccessToken(interactive: false);
+
+    final existing = await findProofFile(expenseId, token: token);
+    if (existing != null) return existing;
+
+    final boundary = 'purrse_proof_${DateTime.now().millisecondsSinceEpoch}';
+    final metadata = jsonEncode({
+      'name': 'purrse_bukti_$expenseId.${localPath.split('.').last.toLowerCase()}',
+      'appProperties': {proofIdProperty: expenseId},
+    });
+
+    final body = <int>[
+      ...utf8.encode('--$boundary\r\n'
+          'Content-Type: application/json; charset=UTF-8\r\n\r\n'
+          '$metadata\r\n'
+          '--$boundary\r\n'
+          'Content-Type: ${_mimeFor(localPath)}\r\n\r\n'),
+      ...bytes,
+      ...utf8.encode('\r\n--$boundary--'),
+    ];
+
+    final r = await http.post(
+      Uri.parse('$driveUploadUrl?uploadType=multipart&fields=id'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'multipart/related; boundary=$boundary',
+      },
+      body: Uint8List.fromList(body),
+    );
+    _checkAuth(r);
+    if (r.statusCode < 200 || r.statusCode >= 300) {
+      throw Exception('Upload ditolak Drive (${r.statusCode}).');
+    }
+    final id = (jsonDecode(r.body) as Map<String, dynamic>)['id']?.toString();
+    if (id == null || id.isEmpty) {
+      throw Exception('Drive tidak mengonfirmasi ID file.');
+    }
+    return id;
+  }
+
+  /// Unduh foto bukti dari Drive (mis. di perangkat lain).
+  Future<Uint8List> downloadProof(String fileId) async {
+    final token = await getAccessToken(interactive: false);
+    final r = await http.get(
+      Uri.parse('$driveFilesUrl/$fileId').replace(queryParameters: {'alt': 'media'}),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    _checkAuth(r);
+    if (r.statusCode != 200) {
+      throw Exception('Gagal mengunduh foto (${r.statusCode}).');
+    }
+    return r.bodyBytes;
   }
 
   // ============================================================

@@ -36,12 +36,23 @@ class _SplashScreenState extends State<SplashScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Center(
-        child: Container(
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0.85, end: 1),
+          duration: MediaQuery.of(context).disableAnimations
+              ? Duration.zero
+              : const Duration(milliseconds: 700),
+          curve: Curves.easeOutBack,
+          builder: (_, t, child) => Opacity(
+            opacity: t.clamp(0.0, 1.0),
+            child: Transform.scale(scale: t, child: child),
+          ),
+          child: Container(
           width: 140,
           height: 140,
-          decoration: const BoxDecoration(
-            color: Color(0xFFD9D9D9),
+          decoration: BoxDecoration(
+            color: ThemeController.instance.accentColor,
             shape: BoxShape.circle,
+            border: Border.all(color: AppColors.ink, width: 2.5),
           ),
           alignment: Alignment.center,
           child: Image.asset(
@@ -51,6 +62,7 @@ class _SplashScreenState extends State<SplashScreen> {
             fit: BoxFit.contain,
           ),
           ),
+        ),
         ),
     );
   }

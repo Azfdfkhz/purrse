@@ -1,8 +1,13 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../../models/category_model.dart';
 import '../../models/expense_model.dart';
+import '../../services/google_drive_service.dart';
+import '../../services/proof_upload_service.dart';
 import '../../services/storage_service.dart';
+import '../expense/add_expense_modal.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/formatters.dart';
 
@@ -21,10 +26,35 @@ class TransaksiScreenState extends State<TransaksiScreen> {
   DateTime? _selectedDate;
   bool _loading = true;
 
+  StreamSubscription<void>? _uploadSub;
+
   @override
   void initState() {
     super.initState();
     reload();
+    _uploadSub = ProofUploadService.instance.changes.listen((_) => reload());
+  }
+
+  @override
+  void dispose() {
+    _uploadSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _edit(ExpenseModel expense) async {
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black45,
+      builder: (_) => AddExpenseModal(expense: expense),
+    );
+    if (saved == true) await reload();
+  }
+
+  Future<void> _retryUpload(ExpenseModel expense) async {
+    if (_userId == null) return;
+    await ProofUploadService.instance.retry(_userId!, expense.id);
   }
 
   Future<void> reload() async {
@@ -56,16 +86,17 @@ class TransaksiScreenState extends State<TransaksiScreen> {
   }
 
   List<ExpenseModel> get _photoExpenses {
-    return _expenses.where((expense) => expense.proofPath != null && File(expense.proofPath!).existsSync()).toList();
+    return _expenses.where((expense) {
+      final localOk = expense.proofPath != null && File(expense.proofPath!).existsSync();
+      return localOk || expense.driveFileId != null;
+    }).toList();
   }
 
   List<ExpenseModel> get _filteredExpenses {
     return _photoExpenses.where((expense) {
       final categoryMatch = _categoryId == null || expense.categoryId == _categoryId;
       final dateMatch = _selectedDate == null ||
-          (expense.date.year == _selectedDate!.year &&
-              expense.date.month == _selectedDate!.month &&
-              expense.date.day == _selectedDate!.day);
+          ExpenseModel.dateKey(expense.date) == ExpenseModel.dateKey(_selectedDate!);
       return categoryMatch && dateMatch;
     }).toList();
   }
@@ -190,6 +221,8 @@ class TransaksiScreenState extends State<TransaksiScreen> {
                       expense: expense,
                       category: category,
                       onDelete: () => _deleteExpense(expense),
+                      onEdit: () => _edit(expense),
+                      onRetry: () => _retryUpload(expense),
                     ),
                   );
                 },
@@ -215,14 +248,14 @@ class _FilterChip extends StatelessWidget {
       label: Text(label),
       selected: selected,
       onSelected: (_) => onTap(),
-      selectedColor: color,
+      selectedColor: AppColors.ink,
       labelStyle: TextStyle(
-        color: selected ? (color.computeLuminance() > 0.55 ? AppColors.textDark : Colors.white) : AppColors.textDark,
+        color: selected ? Colors.white : AppColors.textDark,
         fontWeight: FontWeight.w700,
-        fontSize: 12,
+        fontSize: 13,
       ),
       backgroundColor: Colors.white,
-      side: BorderSide(color: selected ? color : AppColors.cardBorder),
+      side: BorderSide(color: AppColors.ink, width: selected ? 1.5 : 1),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       showCheckmark: false,
     );
@@ -233,8 +266,40 @@ class _TransactionCard extends StatelessWidget {
   final ExpenseModel expense;
   final CategoryModel? category;
   final VoidCallback onDelete;
+  final VoidCallback onEdit;
+  final VoidCallback onRetry;
 
-  const _TransactionCard({required this.expense, required this.category, required this.onDelete});
+  const _TransactionCard({
+    required this.expense,
+    required this.category,
+    required this.onDelete,
+    required this.onEdit,
+    required this.onRetry,
+  });
+
+  bool get _localExists => expense.proofPath != null && File(expense.proofPath!).existsSync();
+
+  Widget _image({required double height, required BoxFit fit}) {
+    if (_localExists) {
+      return Image.file(File(expense.proofPath!), height: height, width: double.infinity, fit: fit);
+    }
+    return _DriveImage(fileId: expense.driveFileId!, height: height, fit: fit);
+  }
+
+  (String, Color, IconData) _uploadInfo() {
+    switch (expense.uploadStatus) {
+      case UploadStatus.uploaded:
+        return ('Tersimpan di Drive', const Color(0xFF2E7D32), Icons.cloud_done_rounded);
+      case UploadStatus.uploading:
+        return ('Mengunggah…', const Color(0xFF1565C0), Icons.cloud_upload_rounded);
+      case UploadStatus.failed:
+        return ('Upload gagal', const Color(0xFFC62828), Icons.cloud_off_rounded);
+      case UploadStatus.needsAuth:
+        return ('Hubungkan Drive', const Color(0xFFEF6C00), Icons.link_off_rounded);
+      default:
+        return ('Menunggu upload', AppColors.textGrey, Icons.cloud_queue_rounded);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -243,8 +308,7 @@ class _TransactionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.cardBorder),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.035), blurRadius: 12, offset: const Offset(0, 5))],
+        border: Border.all(color: AppColors.ink, width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -253,7 +317,7 @@ class _TransactionCard extends StatelessWidget {
             borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
             child: GestureDetector(
               onTap: () => _showImage(context),
-              child: Image.file(File(expense.proofPath!), height: 210, width: double.infinity, fit: BoxFit.cover),
+              child: _image(height: 210, fit: BoxFit.cover),
             ),
           ),
           Padding(
@@ -276,11 +340,44 @@ class _TransactionCard extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text('${category?.name ?? 'Tanpa kategori'} · ${Formatters.date(expense.date)}', style: const TextStyle(color: AppColors.textGrey, fontSize: 12)),
                       const SizedBox(height: 6),
-                      Text(Formatters.currency(expense.amount), style: TextStyle(color: primary, fontWeight: FontWeight.w800, fontSize: 15)),
+                      Text(Formatters.currency(expense.amount), style: TextStyle(color: primary, fontWeight: FontWeight.w800, fontSize: 17)),
+                      const SizedBox(height: 8),
+                      Builder(builder: (_) {
+                        final (label, color, icon) = _uploadInfo();
+                        final canRetry = expense.uploadStatus == UploadStatus.failed ||
+                            expense.uploadStatus == UploadStatus.needsAuth;
+                        return Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 6,
+                          children: [
+                            Icon(icon, size: 16, color: color),
+                            Text(label, style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w700)),
+                            if (canRetry)
+                              InkWell(
+                                onTap: onRetry,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+                                  child: Text('Coba lagi', style: TextStyle(fontSize: 12, color: primary, fontWeight: FontWeight.w800)),
+                                ),
+                              ),
+                          ],
+                        );
+                      }),
                     ],
                   ),
                 ),
-                IconButton(onPressed: onDelete, tooltip: 'Hapus', icon: const Icon(Icons.more_vert_rounded, color: AppColors.textGrey)),
+                PopupMenuButton<String>(
+                  tooltip: 'Menu transaksi',
+                  icon: const Icon(Icons.more_vert_rounded, color: AppColors.textGrey),
+                  onSelected: (v) {
+                    if (v == 'edit') onEdit();
+                    if (v == 'delete') onDelete();
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'edit', child: Text('Edit')),
+                    PopupMenuItem(value: 'delete', child: Text('Hapus')),
+                  ],
+                ),
               ],
             ),
           ),
@@ -290,7 +387,7 @@ class _TransactionCard extends StatelessWidget {
   }
 
   void _showImage(BuildContext context) {
-    if (expense.proofPath == null) return;
+    if (!_localExists && expense.driveFileId == null) return;
     showDialog(
       context: context,
       builder: (_) => Dialog(
@@ -298,7 +395,7 @@ class _TransactionCard extends StatelessWidget {
         insetPadding: const EdgeInsets.all(18),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(20),
-          child: InteractiveViewer(child: Image.file(File(expense.proofPath!), fit: BoxFit.contain)),
+          child: InteractiveViewer(child: _image(height: 520, fit: BoxFit.contain)),
         ),
       ),
     );
@@ -329,6 +426,50 @@ class _EmptyTransactions extends StatelessWidget {
             const Text('Upload foto bukti saat mencatat pengeluaran agar foto muncul di sini.', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textGrey, fontSize: 13)),
           ],
         ),
+      ),
+    );
+  }
+}
+
+
+/// Foto dari Google Drive (saat file lokal tidak ada, mis. perangkat lain).
+class _DriveImage extends StatefulWidget {
+  final String fileId;
+  final double height;
+  final BoxFit fit;
+  const _DriveImage({required this.fileId, required this.height, required this.fit});
+
+  @override
+  State<_DriveImage> createState() => _DriveImageState();
+}
+
+class _DriveImageState extends State<_DriveImage> {
+  late Future<Uint8List> _future = GoogleDriveService.instance.downloadProof(widget.fileId);
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: widget.height,
+      width: double.infinity,
+      child: FutureBuilder<Uint8List>(
+        future: _future,
+        builder: (context, snap) {
+          if (snap.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snap.hasError || snap.data == null) {
+            return Center(
+              child: TextButton.icon(
+                onPressed: () => setState(() {
+                  _future = GoogleDriveService.instance.downloadProof(widget.fileId);
+                }),
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Foto belum bisa dimuat. Ketuk untuk coba lagi'),
+              ),
+            );
+          }
+          return Image.memory(snap.data!, fit: widget.fit, width: double.infinity);
+        },
       ),
     );
   }
