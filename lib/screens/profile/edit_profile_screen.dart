@@ -93,7 +93,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       bottom: 0,
                       child: Container(
                         padding: EdgeInsets.all(8),
-                        decoration: BoxDecoration(color: AppColors.surface, shape: BoxShape.circle, border: Border.all(color: AppColors.ink, width: 1.2)),
+                        decoration: BoxDecoration(color: AppColors.surface, shape: BoxShape.circle, border: Border.all(color: AppColors.border, width: 1)),
                         child: Icon(Icons.camera_alt_rounded, color: AppColors.textDark, size: 20),
                       ),
                     ),

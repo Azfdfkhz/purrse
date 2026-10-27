@@ -72,13 +72,15 @@ class FadeSlideIn extends StatelessWidget {
   }
 }
 
-/// Kartu putih beroutline tinta tebal (gaya playful-minimalis).
+/// Kartu bersih: permukaan putih, sudut besar, garis sangat halus + bayangan lembut.
+/// (Parameter [bold] dipertahankan agar pemanggil lama tetap valid; tidak lagi
+/// menggambar outline hitam tebal.)
 class InkCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
   final Color? color;
   final double radius;
-  final bool bold; // outline tebal (true) atau tipis lembut (false)
+  final bool bold;
 
   const InkCard({
     super.key,
@@ -96,10 +98,8 @@ class InkCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: color ?? AppColors.surface,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(
-          color: bold ? AppColors.ink : AppColors.cardBorder,
-          width: bold ? 1.5 : 1,
-        ),
+        border: Border.all(color: AppColors.hairline, width: 1),
+        boxShadow: AppColors.softShadow,
       ),
       child: child,
     );

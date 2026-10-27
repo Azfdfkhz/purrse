@@ -266,7 +266,7 @@ class _AddExpenseModalState extends State<AddExpenseModal> {
             decoration: BoxDecoration(
               color: AppColors.surface,
               borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-              border: Border(top: BorderSide(color: AppColors.ink, width: 2)),
+              
             ),
             child: _loading
                 ? Padding(
@@ -315,15 +315,15 @@ class _AddExpenseModalState extends State<AddExpenseModal> {
                                       border: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(16),
                                         borderSide: BorderSide(
-                                          color: _amountError == null ? AppColors.ink : AppColors.danger,
-                                          width: 1.5,
+                                          color: _amountError == null ? AppColors.border : AppColors.danger,
+                                          width: 1,
                                         ),
                                       ),
                                       enabledBorder: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(16),
                                         borderSide: BorderSide(
-                                          color: _amountError == null ? AppColors.ink : AppColors.danger,
-                                          width: 1.5,
+                                          color: _amountError == null ? AppColors.border : AppColors.danger,
+                                          width: 1,
                                         ),
                                       ),
                                     ),
@@ -358,10 +358,9 @@ class _AddExpenseModalState extends State<AddExpenseModal> {
                                                     decoration: BoxDecoration(
                                                       color: c.color,
                                                       borderRadius: BorderRadius.circular(18),
-                                                      border: Border.all(
-                                                        color: AppColors.ink,
-                                                        width: selected ? 3 : 1,
-                                                      ),
+                                                      border: selected
+                                                          ? Border.all(color: AppColors.ink, width: 2)
+                                                          : null,
                                                     ),
                                                     child: Icon(
                                                       selected ? Icons.check_rounded : c.icon,

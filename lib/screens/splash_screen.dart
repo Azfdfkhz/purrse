@@ -52,7 +52,6 @@ class _SplashScreenState extends State<SplashScreen> {
           decoration: BoxDecoration(
             color: ThemeController.instance.accentColor,
             shape: BoxShape.circle,
-            border: Border.all(color: AppColors.ink, width: 2.5),
           ),
           alignment: Alignment.center,
           child: Image.asset(

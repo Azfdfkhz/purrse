@@ -313,7 +313,7 @@ class _DateChip extends StatelessWidget {
             fontWeight: FontWeight.w700,
             fontSize: 13,
           ),
-          side: BorderSide(color: AppColors.ink, width: active ? 1.5 : 1),
+          side: BorderSide(color: active ? AppColors.ink : AppColors.border, width: 1),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           materialTapTargetSize: MaterialTapTargetSize.padded,
         ),
@@ -343,7 +343,7 @@ class _FilterChip extends StatelessWidget {
           fontSize: 13,
         ),
         backgroundColor: AppColors.surface,
-        side: BorderSide(color: AppColors.ink, width: selected ? 1.5 : 1),
+        side: BorderSide(color: selected ? AppColors.ink : AppColors.border, width: 1),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         showCheckmark: false,
         materialTapTargetSize: MaterialTapTargetSize.padded,
@@ -405,7 +405,8 @@ class _TransactionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.ink, width: 1.5),
+        border: Border.all(color: AppColors.hairline, width: 1),
+        boxShadow: AppColors.softShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

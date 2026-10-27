@@ -160,7 +160,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       onPressed: _logout,
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.isDark ? Color(0xFFFF8A80) : AppColors.danger,
-                        side: BorderSide(color: AppColors.isDark ? Color(0xFFFF8A80) : AppColors.danger, width: 1.5),
+                        side: BorderSide(color: AppColors.isDark ? Color(0xFFFF8A80) : AppColors.danger, width: 1),
                         minimumSize: Size(48, 52),
                       ),
                       icon: Icon(Icons.logout_rounded),
@@ -220,7 +220,8 @@ class _AccountCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.ink, width: 1.5),
+        border: Border.all(color: AppColors.hairline, width: 1),
+        boxShadow: AppColors.softShadow,
       ),
       child: Column(
         children: [

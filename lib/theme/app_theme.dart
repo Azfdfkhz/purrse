@@ -25,18 +25,18 @@ class AppTheme {
         error: AppColors.danger,
       ),
       dividerColor: AppColors.border,
-      textTheme: GoogleFonts.nunitoTextTheme(base.textTheme).apply(
+      textTheme: GoogleFonts.interTextTheme(base.textTheme).apply(
         bodyColor: text,
         displayColor: text,
       ).copyWith(
-        displayLarge: GoogleFonts.baloo2(fontWeight: FontWeight.w700, color: text),
-        headlineMedium: GoogleFonts.baloo2(fontWeight: FontWeight.w700, color: text),
-        titleLarge: GoogleFonts.baloo2(fontWeight: FontWeight.w700, color: text),
+        displayLarge: GoogleFonts.inter(fontWeight: FontWeight.w700, color: text, letterSpacing: -0.4),
+        headlineMedium: GoogleFonts.inter(fontWeight: FontWeight.w700, color: text, letterSpacing: -0.4),
+        titleLarge: GoogleFonts.inter(fontWeight: FontWeight.w700, color: text, letterSpacing: -0.4),
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         backgroundColor: AppColors.ink,
-        contentTextStyle: GoogleFonts.nunito(
+        contentTextStyle: GoogleFonts.inter(
           color: AppColors.onInk,
           fontSize: 14,
           fontWeight: FontWeight.w700,
@@ -51,8 +51,8 @@ class AppTheme {
       dialogTheme: DialogThemeData(
         backgroundColor: AppColors.surface,
         surfaceTintColor: Colors.transparent,
-        titleTextStyle: GoogleFonts.baloo2(fontWeight: FontWeight.w700, fontSize: 20, color: text),
-        contentTextStyle: GoogleFonts.nunito(fontSize: 14, color: text),
+        titleTextStyle: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 20, color: text),
+        contentTextStyle: GoogleFonts.inter(fontSize: 14, color: text),
       ),
       timePickerTheme: TimePickerThemeData(backgroundColor: AppColors.surface),
       datePickerTheme: DatePickerThemeData(
@@ -79,7 +79,7 @@ class AppTheme {
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: text,
-          side: BorderSide(color: AppColors.ink, width: 1.5),
+          side: BorderSide(color: AppColors.border, width: 1),
           minimumSize: Size(48, 48),
           shape: StadiumBorder(),
         ),
@@ -89,7 +89,7 @@ class AppTheme {
         foregroundColor: text,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        titleTextStyle: GoogleFonts.nunito(fontWeight: FontWeight.w800, fontSize: 18, color: text),
+        titleTextStyle: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18, color: text),
         iconTheme: IconThemeData(color: text),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -119,11 +119,15 @@ class AppTheme {
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: AppColors.border, width: 1),
+        ),
         hintStyle: TextStyle(color: AppColors.textGrey),
         labelStyle: TextStyle(color: AppColors.textGrey),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: dark ? accent : AppColors.ink, width: 1.8),
+          borderSide: BorderSide(color: dark ? accent : AppColors.ink, width: 1.4),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),

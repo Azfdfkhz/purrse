@@ -45,10 +45,56 @@ class GoogleDriveService {
     await GoogleSignIn.instance.initialize(
       serverClientId: serverClientId,
     );
+    // Muat status "pernah terhubung" lebih dulu supaya UI tidak sempat
+    // menampilkan "Hubungkan" sebelum sesi selesai dipulihkan.
+    final prefs = await SharedPreferences.getInstance();
+    _persistedConnected = prefs.getBool(_kConnectedFlag) ?? false;
+    _persistedEmail = prefs.getString(_kEmail);
   }
 
   // ============================================================
-  // LOGIN GOOGLE
+  // STATUS TERSIMPAN (satu kali hubungkan -> menetap)
+  // ============================================================
+
+  static const String _kConnectedFlag = 'drive_connected';
+  static const String _kEmail = 'drive_email';
+
+  bool _persistedConnected = false;
+  String? _persistedEmail;
+
+  /// True bila pengguna pernah menghubungkan Drive dan belum memutusnya,
+  /// walaupun sesi Google belum selesai dipulihkan pada peluncuran ini.
+  bool get isLinked => _persistedConnected;
+
+  /// Email akun Drive (dari sesi aktif, atau yang tersimpan terakhir).
+  String? get linkedEmail => _account?.email ?? _persistedEmail;
+
+  Future<void> _remember(GoogleSignInAccount account) async {
+    _account = account;
+    _persistedConnected = true;
+    _persistedEmail = account.email;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kConnectedFlag, true);
+    await prefs.setString(_kEmail, account.email);
+  }
+
+  Future<void> _forget() async {
+    _account = null;
+    _persistedConnected = false;
+    _persistedEmail = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kConnectedFlag, false);
+    await prefs.remove(_kEmail);
+  }
+
+  /// True jika pengguna pernah menghubungkan Drive dan belum memutusnya.
+  Future<bool> wasConnected() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_kConnectedFlag) ?? false;
+  }
+
+  // ============================================================
+  // LOGIN GOOGLE (interaktif, hanya sekali)
   // ============================================================
 
   Future<GoogleSignInAccount?> signIn() async {
@@ -58,56 +104,74 @@ class GoogleDriveService {
       );
     }
 
-    final account =
-    await GoogleSignIn.instance.authenticate();
+    // Minta izin Drive bersamaan dengan login, supaya persetujuan hanya
+    // muncul satu kali dan tidak diminta lagi saat backup.
+    final account = await GoogleSignIn.instance.authenticate(
+      scopeHint: [driveScope],
+    );
 
-    _account = account;
-    await _setConnectedFlag(true);
+    final client = account.authorizationClient;
+    final granted = await client.authorizationForScopes([driveScope]);
+    if (granted == null) {
+      await client.authorizeScopes([driveScope]);
+    }
 
+    await _remember(account);
     return account;
   }
 
   // ============================================================
-  // SESI TERSIMPAN (tidak perlu pilih akun lagi tiap buka aplikasi)
+  // PULIHKAN SESI SECARA SENYAP
   // ============================================================
 
-  static const String _kConnectedFlag = 'drive_connected';
+  Future<bool>? _restoring;
 
-  Future<void> _setConnectedFlag(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_kConnectedFlag, value);
+  /// Pulihkan sesi tanpa dialog. Aman dipanggil berulang dan bersamaan:
+  /// semua pemanggil berbagi satu proses (sebelumnya dua panggilan
+  /// bersamaan membuat salah satunya gagal dan UI meminta login ulang).
+  /// Kegagalan TIDAK menghapus status "terhubung" — mungkin hanya offline.
+  Future<bool> restoreSession() {
+    if (_account != null) return Future.value(true);
+    return _restoring ??= _doRestore().whenComplete(() => _restoring = null);
   }
 
-  /// True jika pengguna pernah menghubungkan Drive dan belum memutusnya.
-  Future<bool> wasConnected() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_kConnectedFlag) ?? false;
-  }
-
-  /// Pulihkan sesi secara senyap (tanpa dialog). Aman dipanggil berulang.
-  Future<bool> restoreSession() async {
-    if (_account != null) return true;
+  Future<bool> _doRestore() async {
     if (!await wasConnected()) return false;
-    try {
-      final account =
-          await GoogleSignIn.instance.attemptLightweightAuthentication();
-      if (account == null) return false;
-      _account = account;
-      return true;
-    } catch (_) {
-      return false;
+    const waits = [0, 600, 1800];
+    for (final ms in waits) {
+      if (ms > 0) await Future.delayed(Duration(milliseconds: ms));
+      try {
+        final pending = GoogleSignIn.instance.attemptLightweightAuthentication();
+        final account = pending == null ? null : await pending;
+        if (account != null) {
+          await _remember(account);
+          return true;
+        }
+      } catch (_) {
+        // coba lagi; jangan putuskan status terhubung
+      }
     }
+    return false;
+  }
+
+  /// Pastikan ada sesi: pulihkan dulu, baru (bila perlu) tampilkan login.
+  Future<bool> ensureConnected({bool interactive = true}) async {
+    if (_account != null) return true;
+    if (await restoreSession()) return true;
+    if (!interactive) return false;
+    return (await signIn()) != null;
   }
 
   // ============================================================
-  // LOGOUT GOOGLE
+  // LOGOUT GOOGLE (hanya atas permintaan pengguna)
   // ============================================================
 
   Future<void> signOut() async {
-    await GoogleSignIn.instance.signOut();
-
-    _account = null;
-    await _setConnectedFlag(false);
+    try {
+      await GoogleSignIn.instance.signOut();
+    } finally {
+      await _forget();
+    }
   }
 
   // ============================================================
@@ -123,10 +187,7 @@ class GoogleDriveService {
   // ============================================================
 
   Future<String> getAccessToken({bool interactive = true}) async {
-    if (_account == null && !interactive) {
-      await restoreSession();
-    }
-    if (_account == null) {
+    if (_account == null && !await restoreSession()) {
       if (!interactive) throw DriveAuthRequired();
       await signIn();
     }

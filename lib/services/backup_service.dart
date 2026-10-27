@@ -260,9 +260,7 @@ class BackupService {
     String appVersion = '1.2.2',
   }) async {
     // Pastikan Google Drive terhubung
-    if (!_drive.isSignedIn) {
-      await _drive.signIn();
-    }
+    await _drive.ensureConnected();
 
     // Buat backup dari data lokal
     final backupJson =
@@ -300,9 +298,7 @@ class BackupService {
 
   /// Unduh dan validasi backup tanpa mengubah data lokal.
   Future<BackupPreview> previewGoogleDriveBackup() async {
-    if (!_drive.isSignedIn) {
-      await _drive.signIn();
-    }
+    await _drive.ensureConnected();
     if (!await _drive.hasBackup()) {
       throw Exception(
         'Belum ada file backup di Google Drive akun ini. Pastikan akun Google '
@@ -360,9 +356,7 @@ class BackupService {
 
   Future<void> restoreFromGoogleDrive() async {
     // Pastikan Google Drive terhubung
-    if (!_drive.isSignedIn) {
-      await _drive.signIn();
-    }
+    await _drive.ensureConnected();
 
     // Download backup dari Google Drive
     final backupJson =
@@ -379,7 +373,7 @@ class BackupService {
   // ============================================================
 
   Future<bool> hasGoogleDriveBackup() async {
-    if (!_drive.isSignedIn) {
+    if (!await _drive.ensureConnected(interactive: false)) {
       return false;
     }
 

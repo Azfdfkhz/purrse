@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../profile/category_management_screen.dart';
 import '../profile/notification_settings_screen.dart';
-import 'package:fl_chart/fl_chart.dart';
 import '../../models/expense_model.dart';
 import '../../models/category_model.dart';
 import '../../models/user_model.dart';
@@ -13,8 +13,15 @@ import '../../widgets/ui_kit.dart';
 
 class BerandaScreen extends StatefulWidget {
   final VoidCallback? onNavigateToLaporan;
+  final VoidCallback? onNavigateToTransaksi;
+  final VoidCallback? onAddExpense;
 
-  const BerandaScreen({super.key, this.onNavigateToLaporan});
+  const BerandaScreen({
+    super.key,
+    this.onNavigateToLaporan,
+    this.onNavigateToTransaksi,
+    this.onAddExpense,
+  });
 
   @override
   State<BerandaScreen> createState() => BerandaScreenState();
@@ -22,6 +29,7 @@ class BerandaScreen extends StatefulWidget {
 
 class BerandaScreenState extends State<BerandaScreen> {
   UserModel? _user;
+  List<ExpenseModel> _all = [];
   List<ExpenseModel> _monthExpenses = [];
   List<CategoryModel> _categories = [];
   int _month = DateTime.now().month;
@@ -35,7 +43,8 @@ class BerandaScreenState extends State<BerandaScreen> {
   }
 
   Future<void> reload() async {
-    setState(() => _loading = true);
+    // Spinner hanya saat pertama kali; muat ulang berikutnya tanpa berkedip.
+    if (_user == null) setState(() => _loading = true);
     final user = await StorageService.instance.getCurrentUser();
     if (user == null) {
       if (mounted) setState(() => _loading = false);
@@ -47,6 +56,7 @@ class BerandaScreenState extends State<BerandaScreen> {
     setState(() {
       _user = user;
       _categories = cats;
+      _all = all;
       _monthExpenses = StorageService.instance.filterByMonth(all, _month, _year);
       _loading = false;
     });
@@ -58,17 +68,16 @@ class BerandaScreenState extends State<BerandaScreen> {
       context: context,
       backgroundColor: AppColors.surface,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       builder: (_) => SizedBox(
-        height: 320,
+        height: 360,
         child: ListView.builder(
+          padding: EdgeInsets.symmetric(vertical: 12),
           itemCount: 12,
           itemBuilder: (_, i) => ListTile(
             title: Text(Formatters.monthNames[i]),
-            trailing: _month == i + 1
-                ? Icon(Icons.check_rounded, color: themeColor)
-                : null,
+            trailing: _month == i + 1 ? Icon(Icons.check_rounded, color: themeColor) : null,
             onTap: () => Navigator.pop(context, i + 1),
           ),
         ),
@@ -82,6 +91,14 @@ class BerandaScreenState extends State<BerandaScreen> {
 
   double get _total => _monthExpenses.fold(0, (sum, e) => sum + e.amount);
 
+  double get _prevTotal {
+    final pm = _month == 1 ? 12 : _month - 1;
+    final py = _month == 1 ? _year - 1 : _year;
+    return StorageService.instance
+        .filterByMonth(_all, pm, py)
+        .fold<double>(0, (sum, e) => sum + e.amount);
+  }
+
   Map<String, double> get _byCategory {
     final map = <String, double>{};
     for (final e in _monthExpenses) {
@@ -91,11 +108,14 @@ class BerandaScreenState extends State<BerandaScreen> {
   }
 
   CategoryModel? _categoryById(String id) {
-    try {
-      return _categories.firstWhere((c) => c.id == id);
-    } catch (_) {
-      return null;
+    for (final c in _categories) {
+      if (c.id == id) return c;
     }
+    return null;
+  }
+
+  void _openCategories() {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => CategoryManagementScreen()));
   }
 
   @override
@@ -125,115 +145,126 @@ class BerandaScreenState extends State<BerandaScreen> {
       return AnimatedBuilder(
         animation: ThemeController.instance,
         builder: (context, _) => Center(
-          child: CircularProgressIndicator(
-            color: ThemeController.instance.accentColor,
-          ),
+          child: CircularProgressIndicator(color: ThemeController.instance.accentColor),
         ),
       );
     }
 
     final byCategory = _byCategory;
+    final recent = [..._monthExpenses]..sort((a, b) {
+        final d = b.date.compareTo(a.date);
+        return d != 0 ? d : b.createdAt.compareTo(a.createdAt);
+      });
 
     return AnimatedBuilder(
       animation: ThemeController.instance,
       builder: (context, _) {
         final themeColor = ThemeController.instance.accentColor;
+        final hasAvatar = _user?.avatarPath != null &&
+            _user!.avatarPath!.isNotEmpty &&
+            File(_user!.avatarPath!).existsSync();
 
-        return Padding(
-          padding: EdgeInsets.fromLTRB(20, 12, 20, 8),
-          child: Column(
-            children: [
-              // Header
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Halo, ${_user!.username} 👋',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 24),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => NotificationSettingsScreen()),
-                    ),
-                    tooltip: 'Pengaturan notifikasi',
-                    icon: Icon(
-                      Icons.notifications_none_rounded,
-                      color: AppColors.textDark,
-                      size: 26,
-                    ),
-                  ),
-                  CircleAvatar(
-                    radius: 24,
-                    backgroundColor: AppColors.ink,
-                    child: CircleAvatar(
-                    radius: 22,
-                    backgroundColor: themeColor,
-                    backgroundImage: (_user?.avatarPath != null && _user!.avatarPath!.isNotEmpty)
-                        ? FileImage(File(_user!.avatarPath!))
-                        : null,
-                    child: (_user?.avatarPath == null || _user!.avatarPath!.isEmpty)
-                        ? Icon(Icons.person, color: AppColors.onPastel)
-                        : null,
-                  ),
-                  ),
-                ],
-              ),
-              SizedBox(height: 16),
-
-              // Card Saldo/Pengeluaran
-              FadeSlideIn(child: _BalanceCard(
-                count: _monthExpenses.length,
-                total: _total,
-                month: _month,
-                color: themeColor,
-                year: _year,
-                onMonthTap: _pickMonth,
-                onSummaryTap: () {
-                  if (widget.onNavigateToLaporan != null) {
-                    widget.onNavigateToLaporan!();
-                  }
-                },
-              )),
-              SizedBox(height: 14),
-
-              // Donut Chart & Legenda
-              SizedBox(
-                height: 170,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+        return RefreshIndicator(
+          onRefresh: reload,
+          color: AppColors.ink,
+          child: SingleChildScrollView(
+            physics: AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(20, 12, 20, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header: tombol bulat kiri, avatar kanan
+                Row(
                   children: [
-                    Expanded(
-                      child: _DonutCard(
-                        total: _total,
-                        month: _month,
-                        year: _year,
-                        byCategory: byCategory,
-                        categories: _categories,
+                    _RoundButton(
+                      icon: Icons.notifications_none_rounded,
+                      tooltip: 'Pengaturan notifikasi',
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => NotificationSettingsScreen()),
                       ),
                     ),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: _LegendCard(
-                        byCategory: byCategory,
-                        categories: _categories,
-                      ),
+                    Spacer(),
+                    CircleAvatar(
+                      radius: 22,
+                      backgroundColor: themeColor,
+                      backgroundImage: hasAvatar ? FileImage(File(_user!.avatarPath!)) : null,
+                      child: hasAvatar
+                          ? null
+                          : Icon(Icons.person_rounded, color: AppColors.onColor(themeColor)),
                     ),
                   ],
                 ),
-              ),
-              SizedBox(height: 14),
-
-              // List Pengeluaran Terbaru
-              Expanded(
-                child: _RecentExpensesCard(
-                  expenses: _monthExpenses,
-                  categoryOf: _categoryById,
-                  themeColor: themeColor,
+                SizedBox(height: 18),
+                Text(
+                  'Halo, ${_user!.username}!',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 30,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.8,
+                    color: AppColors.textDark,
+                  ),
                 ),
-              ),
-            ],
+                SizedBox(height: 2),
+                Text(
+                  'Yuk, catat dan hemat uangmu.',
+                  style: TextStyle(fontSize: 13, color: AppColors.textGrey),
+                ),
+                SizedBox(height: 18),
+
+                FadeSlideIn(
+                  child: _CardStack(
+                    username: _user!.username,
+                    count: _monthExpenses.length,
+                    total: _total,
+                    prevTotal: _prevTotal,
+                    month: _month,
+                    year: _year,
+                    color: themeColor,
+                    onMonthTap: _pickMonth,
+                    onSummaryTap: () => widget.onNavigateToLaporan?.call(),
+                  ),
+                ),
+                SizedBox(height: 16),
+
+                FadeSlideIn(
+                  index: 1,
+                  child: _QuickActions(
+                    items: [
+                      _QuickItem(Icons.add_rounded, 'Tambah', () => widget.onAddExpense?.call()),
+                      _QuickItem(Icons.receipt_long_rounded, 'Transaksi',
+                          () => widget.onNavigateToTransaksi?.call()),
+                      _QuickItem(Icons.bar_chart_rounded, 'Laporan',
+                          () => widget.onNavigateToLaporan?.call()),
+                      _QuickItem(Icons.category_rounded, 'Kategori', _openCategories),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 16),
+
+                if (byCategory.isNotEmpty) ...[
+                  FadeSlideIn(
+                    index: 2,
+                    child: _CategoryBreakdown(
+                      byCategory: byCategory,
+                      categories: _categories,
+                      total: _total,
+                    ),
+                  ),
+                  SizedBox(height: 16),
+                ],
+
+                FadeSlideIn(
+                  index: 3,
+                  child: _RecentCard(
+                    expenses: recent.take(5).toList(),
+                    categoryOf: _categoryById,
+                    onViewAll: () => widget.onNavigateToTransaksi?.call(),
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -241,19 +272,54 @@ class BerandaScreenState extends State<BerandaScreen> {
   }
 }
 
-class _BalanceCard extends StatelessWidget {
-  final double total;
-  final int month;
+class _RoundButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  const _RoundButton({required this.icon, required this.tooltip, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: tooltip,
+      child: Pressable(
+        onTap: onTap,
+        child: Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            shape: BoxShape.circle,
+            boxShadow: AppColors.softShadow,
+          ),
+          child: Icon(icon, color: AppColors.textDark, size: 22),
+        ),
+      ),
+    );
+  }
+}
+
+/// Dua kartu bertumpuk: kartu belakang (bulan lalu) mengintip di atas kartu
+/// utama (bulan terpilih), dengan tombol "Lihat laporan" di lekukan kanan-bawah.
+class _CardStack extends StatelessWidget {
+  final String username;
   final int count;
+  final double total;
+  final double prevTotal;
+  final int month;
   final int year;
   final Color color;
   final VoidCallback onMonthTap;
   final VoidCallback onSummaryTap;
 
-  const _BalanceCard({
-    required this.total,
-    required this.month,
+  const _CardStack({
+    required this.username,
     required this.count,
+    required this.total,
+    required this.prevTotal,
+    required this.month,
     required this.year,
     required this.color,
     required this.onMonthTap,
@@ -262,388 +328,438 @@ class _BalanceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(30),
+    final fg = AppColors.onColor(color);
+    final fgSoft = fg.withOpacity(0.65);
+    final back = AppColors.softOrange;
+    final prevMonth = month == 1 ? 12 : month - 1;
+
+    return SizedBox(
+      height: 214,
       child: Stack(
         children: [
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.fromLTRB(22, 20, 22, 20),
-            color: AppColors.ink,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Flexible(
-                      child: Text(
-                        'Total pengeluaran',
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w600),
-                      ),
+          // Kartu belakang: bulan lalu
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            height: 110,
+            child: Container(
+              padding: EdgeInsets.fromLTRB(20, 14, 20, 0),
+              decoration: BoxDecoration(
+                color: back,
+                borderRadius: BorderRadius.circular(28),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.history_rounded, size: 18, color: AppColors.onPastel),
+                  SizedBox(width: 6),
+                  Text(
+                    Formatters.monthNames[prevMonth - 1],
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.onPastel,
                     ),
-                    Pressable(
-                      onTap: onMonthTap,
-                      child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: color,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
+                  ),
+                  Spacer(),
+                  Text(
+                    Formatters.rupiah(prevTotal),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.onPastel,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Kartu utama
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 44,
+            bottom: 0,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: Stack(
+                children: [
+                  Positioned.fill(child: ColoredBox(color: color)),
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(22, 18, 22, 18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
                           children: [
-                            Text(
-                              '${Formatters.monthNames[month - 1]} $year',
-                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.ink),
+                            Expanded(
+                              child: Text(
+                                'Total pengeluaran',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: fgSoft,
+                                ),
+                              ),
                             ),
-                            SizedBox(width: 2),
-                            Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: AppColors.ink),
+                            Pressable(
+                              onTap: onMonthTap,
+                              child: Container(
+                                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: fg.withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      '${Formatters.monthNames[month - 1]} $year',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: fg,
+                                      ),
+                                    ),
+                                    Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: fg),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ],
                         ),
+                        SizedBox(height: 6),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            Formatters.rupiah(total),
+                            style: TextStyle(
+                              fontSize: 34,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -1,
+                              color: fg,
+                            ),
+                          ),
+                        ),
+                        Spacer(),
+                        Text(
+                          username,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: fg),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          '$count transaksi',
+                          style: TextStyle(fontSize: 12, color: fgSoft),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Lekukan + tombol
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      padding: EdgeInsets.fromLTRB(8, 8, 0, 0),
+                      decoration: BoxDecoration(
+                        color: AppColors.background,
+                        borderRadius: BorderRadius.only(topLeft: Radius.circular(28)),
+                      ),
+                      child: Pressable(
+                        onTap: onSummaryTap,
+                        child: Container(
+                          height: 46,
+                          padding: EdgeInsets.symmetric(horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: AppColors.ink,
+                            borderRadius: BorderRadius.circular(23),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Lihat laporan',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              SizedBox(width: 6),
+                              Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 16),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
-                  ],
-                ),
-                SizedBox(height: 10),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    Formatters.rupiah(total),
-                    style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: Colors.white),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickItem {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  _QuickItem(this.icon, this.label, this.onTap);
+}
+
+class _QuickActions extends StatelessWidget {
+  final List<_QuickItem> items;
+  const _QuickActions({required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkCard(
+      radius: 28,
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+      child: Row(
+        children: [
+          for (final it in items)
+            Expanded(
+              child: Semantics(
+                button: true,
+                label: it.label,
+                child: Pressable(
+                  onTap: it.onTap,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 54,
+                        height: 54,
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceVariant,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(it.icon, color: AppColors.textDark, size: 24),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        it.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textDark,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                SizedBox(height: 14),
-                Row(
-                  children: [
-                    Pressable(
-                      onTap: onSummaryTap,
-                      child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(22),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'Lihat ringkasan',
-                              style: TextStyle(color: AppColors.ink, fontWeight: FontWeight.w800, fontSize: 13),
-                            ),
-                            SizedBox(width: 4),
-                            Icon(Icons.arrow_forward_rounded, color: AppColors.ink, size: 16),
-                          ],
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: 10),
-                    Flexible(
-                      child: Text(
-                        '$count transaksi',
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          // Dekorasi lembut berwarna aksen (mengikuti pilihan warna pengguna)
-          Positioned(
-            right: -34,
-            top: -34,
-            child: IgnorePointer(
-              child: Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(color: color.withOpacity(0.18), shape: BoxShape.circle),
               ),
             ),
-          ),
         ],
       ),
     );
   }
 }
 
-class _DonutCard extends StatelessWidget {
-  final double total;
-  final int month;
-  final int year;
+/// Ringkasan kategori: bilah bersegmen + 4 kategori teratas.
+class _CategoryBreakdown extends StatelessWidget {
   final Map<String, double> byCategory;
   final List<CategoryModel> categories;
+  final double total;
 
-  const _DonutCard({
-    required this.total,
-    required this.month,
-    required this.year,
+  const _CategoryBreakdown({
     required this.byCategory,
     required this.categories,
+    required this.total,
   });
 
   @override
   Widget build(BuildContext context) {
-    final sections = <PieChartSectionData>[];
-    if (byCategory.isEmpty) {
-      sections.add(
-        PieChartSectionData(
-          color: AppColors.cardBorder,
-          value: 1,
-          radius: 22,
-          showTitle: false,
-        ),
-      );
-    } else {
-      for (final entry in byCategory.entries) {
-        final cat = categories.where((c) => c.id == entry.key).toList();
-        final color = cat.isNotEmpty ? cat.first.color : AppColors.softCoral;
-        sections.add(
-          PieChartSectionData(
-            color: color,
-            value: entry.value,
-            radius: 22,
-            showTitle: false,
-          ),
-        );
-      }
-    }
+    final rows = categories.where((c) => byCategory.containsKey(c.id)).toList()
+      ..sort((a, b) => (byCategory[b.id] ?? 0).compareTo(byCategory[a.id] ?? 0));
 
-    return Container(
-      padding: EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.ink, width: 1.5),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          PieChart(
-            PieChartData(
-              sections: sections,
-              centerSpaceRadius: 42,
-              sectionsSpace: 3,
-              startDegreeOffset: -90,
-            ),
-          ),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                Formatters.monthNames[month - 1],
-                style: TextStyle(fontSize: 12, color: AppColors.textGrey),
-              ),
-              SizedBox(height: 2),
-              Text(
-                Formatters.rupiah(total),
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
-              ),
-              Text(
-                '$year',
-                style: TextStyle(fontSize: 12, color: AppColors.textGrey),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LegendCard extends StatelessWidget {
-  final Map<String, double> byCategory;
-  final List<CategoryModel> categories;
-
-  const _LegendCard({required this.byCategory, required this.categories});
-
-  @override
-  Widget build(BuildContext context) {
-    final entries = categories.where((c) => byCategory.containsKey(c.id)).toList();
-    return Container(
-      padding: EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.ink, width: 1.5),
-      ),
-      child: entries.isEmpty
-          ? Center(
-        child: Text(
-          'Belum ada data',
-          style: TextStyle(color: AppColors.textGrey, fontSize: 12),
-        ),
-      )
-          : ListView.separated(
-        physics: BouncingScrollPhysics(),
-        padding: EdgeInsets.zero,
-        itemCount: entries.length,
-        separatorBuilder: (_, __) => SizedBox(height: 10),
-        itemBuilder: (_, i) {
-          final cat = entries[i];
-          final value = byCategory[cat.id] ?? 0;
-          return Row(
-            children: [
-              Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  color: cat.color,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      cat.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Text(
-                      Formatters.rupiah(value),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textGrey,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _RecentExpensesCard extends StatelessWidget {
-  final List<ExpenseModel> expenses;
-  final CategoryModel? Function(String id) categoryOf;
-  final Color themeColor;
-
-  const _RecentExpensesCard({
-    required this.expenses,
-    required this.categoryOf,
-    required this.themeColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.ink, width: 1.5),
-      ),
+    return InkCard(
+      radius: 28,
+      padding: EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Pengeluaran terbaru',
-            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+            'Per kategori',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.textDark),
           ),
-          SizedBox(height: 10),
-          Expanded(
-            child: expenses.isEmpty
-                ? Center(
-              child: Text(
-                'Belum ada pengeluaran bulan ini.\nKetuk tombol + untuk mencatat.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.textGrey, fontSize: 14, height: 1.4),
+          SizedBox(height: 14),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: SizedBox(
+              height: 12,
+              child: Row(
+                children: [
+                  for (var i = 0; i < rows.length; i++) ...[
+                    if (i > 0) SizedBox(width: 2),
+                    Expanded(
+                      flex: ((byCategory[rows[i].id] ?? 0) * 1000).round().clamp(1, 1 << 30).toInt(),
+                      child: ColoredBox(color: rows[i].color),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          SizedBox(height: 14),
+          for (final c in rows.take(4))
+            Padding(
+              padding: EdgeInsets.only(bottom: 10),
+              child: Row(
+                children: [
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(color: c.color, shape: BoxShape.circle),
+                  ),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      c.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textDark),
+                    ),
+                  ),
+                  Text(
+                    Formatters.rupiah(byCategory[c.id] ?? 0),
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textDark),
+                  ),
+                  SizedBox(width: 8),
+                  SizedBox(
+                    width: 38,
+                    child: Text(
+                      total <= 0 ? '' : '${(((byCategory[c.id] ?? 0) / total) * 100).round()}%',
+                      textAlign: TextAlign.right,
+                      style: TextStyle(fontSize: 12, color: AppColors.textGrey),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (rows.length > 4)
+            Text(
+              '+${rows.length - 4} kategori lain',
+              style: TextStyle(fontSize: 12, color: AppColors.textGrey),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecentCard extends StatelessWidget {
+  final List<ExpenseModel> expenses;
+  final CategoryModel? Function(String id) categoryOf;
+  final VoidCallback onViewAll;
+
+  const _RecentCard({
+    required this.expenses,
+    required this.categoryOf,
+    required this.onViewAll,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkCard(
+      radius: 28,
+      padding: EdgeInsets.fromLTRB(18, 18, 18, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Pengeluaran terbaru',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.textDark),
+                ),
+              ),
+              Pressable(
+                onTap: onViewAll,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                  child: Text(
+                    'Lihat semua',
+                    style: TextStyle(fontSize: 12, color: AppColors.textGrey, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 8),
+          if (expenses.isEmpty)
+            Padding(
+              padding: EdgeInsets.symmetric(vertical: 28),
+              child: Center(
+                child: Text(
+                  'Belum ada pengeluaran bulan ini.\nKetuk tombol + untuk mencatat.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.textGrey, fontSize: 13, height: 1.5),
+                ),
               ),
             )
-                : ListView.separated(
-              itemCount: expenses.length,
-              separatorBuilder: (_, __) => SizedBox(height: 10),
-              itemBuilder: (_, i) {
-                final e = expenses[i];
-                final cat = categoryOf(e.categoryId);
-                return Container(
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.background,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: AppColors.cardBorder),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: (cat?.color ?? AppColors.softCoral),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.ink, width: 1.5),
-                        ),
-                        child: Icon(
-                          cat?.icon ?? Icons.category_rounded,
-                          color: AppColors.ink,
-                          size: 20,
-                        ),
-                      ),
-                      SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              cat?.name ?? 'Lainnya',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                              ),
-                            ),
-                            Text(
-                              e.description.isEmpty ? '-' : e.description,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: AppColors.textGrey,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            Formatters.date(e.date),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textGrey,
-                            ),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            Formatters.rupiah(e.amount),
-                            style: TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-              },
+          else
+            for (final e in expenses) _ExpenseRow(expense: e, category: categoryOf(e.categoryId)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExpenseRow extends StatelessWidget {
+  final ExpenseModel expense;
+  final CategoryModel? category;
+
+  const _ExpenseRow({required this.expense, required this.category});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = category?.color ?? AppColors.softCoral;
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            child: Icon(category?.icon ?? Icons.category_rounded, color: AppColors.onColor(color), size: 20),
+          ),
+          SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  expense.description.isEmpty ? (category?.name ?? 'Lainnya') : expense.description,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.textDark),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  '${category?.name ?? 'Lainnya'} • ${Formatters.date(expense.date)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12, color: AppColors.textGrey),
+                ),
+              ],
             ),
+          ),
+          SizedBox(width: 8),
+          Text(
+            Formatters.rupiah(expense.amount),
+            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.textDark),
           ),
         ],
       ),

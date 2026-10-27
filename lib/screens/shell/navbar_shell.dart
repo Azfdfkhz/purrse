@@ -61,7 +61,9 @@ class _NavbarShellState extends State<NavbarShell> {
   late final List<Widget> _pages = [
     BerandaScreen(
       key: _berandaKey,
-      onNavigateToLaporan: () => setState(() => _index = 2), // Pindah ke tab Laporan
+      onNavigateToLaporan: () => setState(() => _index = 2),
+      onNavigateToTransaksi: () => setState(() => _index = 1),
+      onAddExpense: _openAddExpense,
     ),
     TransaksiScreen(key: _transaksiKey),
     LaporanScreen(key: _laporanKey),
@@ -118,6 +120,8 @@ class _NavbarShellState extends State<NavbarShell> {
   }
 }
 
+/// Navbar melayang: pil putih (gelap di Dark Mode) berisi 4 tab; tab aktif
+/// berupa pil hitam dengan ikon + label. Tombol (+) terpisah di sisi kanan.
 class _BottomBar extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
@@ -129,66 +133,76 @@ class _BottomBar extends StatelessWidget {
     required this.onAdd,
   });
 
+  static const _items = <(IconData, IconData, String)>[
+    (Icons.home_outlined, Icons.home_rounded, 'Beranda'),
+    (Icons.receipt_long_outlined, Icons.receipt_long_rounded, 'Transaksi'),
+    (Icons.bar_chart_outlined, Icons.bar_chart_rounded, 'Laporan'),
+    (Icons.person_outline_rounded, Icons.person_rounded, 'Akun'),
+  ];
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: ThemeController.instance,
       builder: (context, _) {
-        final accent = ThemeController.instance.accentColor;
-
-        return Padding(
-          padding: EdgeInsets.fromLTRB(16, 0, 16, 14),
-          child: SizedBox(
-            height: 82,
-            child: Stack(
-              clipBehavior: Clip.none,
-              alignment: Alignment.bottomCenter,
+        final dark = AppColors.isDark;
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(16, 6, 16, 12),
+            child: Row(
               children: [
-                // Pil hitam melayang
-                Container(
-                  height: 68,
-                  padding: EdgeInsets.symmetric(horizontal: 8),
-                  decoration: BoxDecoration(
-                    color: AppColors.ink,
-                    borderRadius: BorderRadius.circular(34),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.22),
-                        blurRadius: 20,
-                        offset: Offset(0, 10),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      _NavItem(icon: Icons.home_rounded, label: 'Beranda', selected: currentIndex == 0, onTap: () => onTap(0)),
-                      _NavItem(icon: Icons.receipt_long_rounded, label: 'Transaksi', selected: currentIndex == 1, onTap: () => onTap(1)),
-                      SizedBox(width: 64), // ruang tombol (+)
-                      _NavItem(icon: Icons.bar_chart_rounded, label: 'Laporan', selected: currentIndex == 2, onTap: () => onTap(2)),
-                      _NavItem(icon: Icons.person_rounded, label: 'Akun', selected: currentIndex == 3, onTap: () => onTap(3)),
-                    ],
+                Expanded(
+                  child: Container(
+                    height: 64,
+                    padding: EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(32),
+                      border: Border.all(color: AppColors.hairline, width: 1),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(dark ? 0.35 : 0.10),
+                          blurRadius: 24,
+                          offset: Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        for (var i = 0; i < _items.length; i++)
+                          _NavItem(
+                            icon: currentIndex == i ? _items[i].$2 : _items[i].$1,
+                            label: _items[i].$3,
+                            selected: currentIndex == i,
+                            onTap: () => onTap(i),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
-
-                // Tombol tambah (+)
-                Positioned(
-                  top: 0,
-                  child: Semantics(
-                    button: true,
-                    label: 'Tambah pengeluaran',
-                    child: Pressable(
-                      onTap: onAdd,
-                      pressedScale: 0.9,
-                      child: Container(
-                        width: 60,
-                        height: 60,
-                        decoration: BoxDecoration(
-                          color: accent,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.ink, width: 3),
-                        ),
-                        child: Icon(Icons.add_rounded, color: AppColors.ink, size: 32),
+                SizedBox(width: 10),
+                Semantics(
+                  button: true,
+                  label: 'Tambah pengeluaran',
+                  child: Pressable(
+                    onTap: onAdd,
+                    pressedScale: 0.92,
+                    child: Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: AppColors.inkInverse,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(dark ? 0.35 : 0.16),
+                            blurRadius: 20,
+                            offset: Offset(0, 8),
+                          ),
+                        ],
                       ),
+                      child: Icon(Icons.add_rounded, color: AppColors.surface, size: 30),
                     ),
                   ),
                 ),
@@ -216,38 +230,40 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fg = selected ? AppColors.surface : AppColors.textGrey;
+    // Tab aktif lebih lebar (memuat label); tab lain berbagi sisa ruang.
     return Expanded(
+      flex: selected ? 5 : 2,
       child: Semantics(
         button: true,
         selected: selected,
         label: label,
         child: Pressable(
           onTap: onTap,
-          child: Center(
-            child: AnimatedContainer(
-              duration: motion(context, 220),
-              curve: Curves.easeOutCubic,
-              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              decoration: BoxDecoration(
-                color: selected ? Colors.white : Colors.transparent,
-                borderRadius: BorderRadius.circular(22),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(icon, size: 24, color: selected ? AppColors.ink : Colors.white70),
-                  SizedBox(height: 2),
-                  Text(
-                    label,
-                    maxLines: 1,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                      color: selected ? AppColors.ink : Colors.white70,
+          child: AnimatedContainer(
+            duration: motion(context, 240),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: selected ? AppColors.inkInverse : Colors.transparent,
+              borderRadius: BorderRadius.circular(26),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 22, color: fg),
+                if (selected) ...[
+                  SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: fg),
                     ),
                   ),
                 ],
-              ),
+              ],
             ),
           ),
         ),

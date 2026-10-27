@@ -44,11 +44,14 @@ class _BackupRestorePageState
       if (mounted) setState(() => _auto = v);
     });
 
-    _connected =
+    // Status "terhubung" dibaca dari penyimpanan (bukan dari sesi yang baru
+    // dibuka), sehingga tidak meminta login ulang setiap aplikasi dibuka.
+    _connected = GoogleDriveService.instance.isLinked ||
         GoogleDriveService.instance.isSignedIn;
 
-    GoogleDriveService.instance.restoreSession().then((ok) {
-      if (mounted && ok != _connected) setState(() => _connected = ok);
+    // Sambungkan ulang sesi di latar. Gagal (mis. offline) TIDAK memutus status.
+    GoogleDriveService.instance.restoreSession().then((_) {
+      if (mounted) setState(() {});
     });
   }
 
@@ -99,9 +102,7 @@ class _BackupRestorePageState
     setState(() => _loading = true);
 
     try {
-      if (!GoogleDriveService.instance.isSignedIn) {
-        await GoogleDriveService.instance.signIn();
-      }
+      await GoogleDriveService.instance.ensureConnected();
 
       await BackupService.instance
           .backupToGoogleDrive();
@@ -367,8 +368,8 @@ class _BackupRestorePageState
                                 SizedBox(width: 10),
                                 Expanded(
                                   child: Text(
-                                    GoogleDriveService.instance.account?.email != null
-                                        ? 'Terhubung: ${GoogleDriveService.instance.account!.email}'
+                                    GoogleDriveService.instance.linkedEmail != null
+                                        ? 'Terhubung: ${GoogleDriveService.instance.linkedEmail}'
                                         : 'Google Drive terhubung',
                                     style: TextStyle(
                                       fontWeight:

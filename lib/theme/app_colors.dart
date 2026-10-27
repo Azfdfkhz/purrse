@@ -12,15 +12,26 @@ class AppColors {
   static Color _p(Color light, Color dark) => isDark ? dark : light;
 
   // ---- Token yang mengikuti tema ----
-  static Color get background => _p(const Color(0xFFFBF7F0), const Color(0xFF15131A));
-  static Color get surface => _p(Colors.white, const Color(0xFF1F1C27));
-  static Color get surfaceVariant => _p(const Color(0xFFF3EEE4), const Color(0xFF2A2633));
-  static Color get border => _p(const Color(0xFFE9E2D6), const Color(0xFF3A3545));
+  static Color get background => _p(const Color(0xFFF2EFE8), const Color(0xFF111014));
+  static Color get surface => _p(Colors.white, const Color(0xFF1C1B21));
+  static Color get surfaceVariant => _p(const Color(0xFFEAE6DC), const Color(0xFF27252D));
+  static Color get border => _p(const Color(0xFFE6E1D5), const Color(0xFF2F2D36));
   static Color get cardBorder => border;
+
+  /// Garis halus untuk kartu/chip (pengganti outline hitam tebal).
+  static Color get hairline => _p(const Color(0x14000000), const Color(0x1FFFFFFF));
+
+  /// Bayangan lembut kartu (hanya di mode terang; di gelap cukup hairline).
+  static List<BoxShadow> get softShadow => isDark
+      ? const []
+      : const [BoxShadow(color: Color(0x0F1F1B24), blurRadius: 18, offset: Offset(0, 6))];
+
+  /// Kebalikan ink: pil terpilih pada navbar (putih di gelap, ink di terang).
+  static Color get inkInverse => _p(const Color(0xFF141414), Colors.white);
 
   /// Warna "tinta": tombol, outline tebal, navbar, kartu utama.
   /// Selalu gelap sehingga teks putih (onInk) di atasnya tetap terbaca.
-  static Color get ink => _p(const Color(0xFF1F1B24), const Color(0xFF3B3647));
+  static Color get ink => _p(const Color(0xFF141414), const Color(0xFF34313D));
 
   /// Teks utama dan teks sekunder (otomatis gelap di terang, terang di gelap).
   static Color get textDark => _p(const Color(0xFF1F1B24), const Color(0xFFF3EFF8));
