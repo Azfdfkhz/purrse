@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models/user_model.dart';
 import '../services/storage_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_controller.dart';
@@ -22,7 +23,14 @@ class _SplashScreenState extends State<SplashScreen> {
   Future<void> _bootstrap() async {
     await Future.delayed(Duration(milliseconds: 1400));
     await ThemeController.instance.load();
-    final user = await StorageService.instance.getCurrentUser();
+    UserModel? user;
+    try {
+      user = await StorageService.instance
+          .getCurrentUser()
+          .timeout(const Duration(seconds: 5));
+    } catch (_) {
+      user = null; // Timeout atau error → arahkan ke layar masuk
+    }
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(

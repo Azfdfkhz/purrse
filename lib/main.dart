@@ -20,8 +20,6 @@ Future<void> main() async {
   await SupabaseService.instance.initialize();
 
   await GoogleDriveService.instance.initialize();
-  // Pulihkan sesi Drive secara senyap (tanpa memilih akun lagi).
-  GoogleDriveService.instance.restoreSession();
 
   AutoBackupService.instance.resumePending();
 

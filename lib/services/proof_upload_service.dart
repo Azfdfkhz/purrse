@@ -86,7 +86,7 @@ class ProofUploadService {
       final candidates = await StorageService.instance.getUploadCandidates(userId);
       if (candidates.isEmpty) return;
 
-      final connected = await drive.restoreSession();
+      final connected = drive.isSignedIn;
       final now = DateTime.now().toUtc();
 
       for (final e in candidates) {

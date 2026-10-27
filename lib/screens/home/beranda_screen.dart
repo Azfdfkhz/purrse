@@ -215,7 +215,6 @@ class BerandaScreenState extends State<BerandaScreen> {
 
                 FadeSlideIn(
                   child: _CardStack(
-                    username: _user!.username,
                     count: _monthExpenses.length,
                     total: _total,
                     prevTotal: _prevTotal,
@@ -304,7 +303,6 @@ class _RoundButton extends StatelessWidget {
 /// Dua kartu bertumpuk: kartu belakang (bulan lalu) mengintip di atas kartu
 /// utama (bulan terpilih), dengan tombol "Lihat laporan" di lekukan kanan-bawah.
 class _CardStack extends StatelessWidget {
-  final String username;
   final int count;
   final double total;
   final double prevTotal;
@@ -315,7 +313,6 @@ class _CardStack extends StatelessWidget {
   final VoidCallback onSummaryTap;
 
   const _CardStack({
-    required this.username,
     required this.count,
     required this.total,
     required this.prevTotal,
@@ -444,13 +441,6 @@ class _CardStack extends StatelessWidget {
                           ),
                         ),
                         Spacer(),
-                        Text(
-                          username,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: fg),
-                        ),
-                        SizedBox(height: 2),
                         Text(
                           '$count transaksi',
                           style: TextStyle(fontSize: 12, color: fgSoft),

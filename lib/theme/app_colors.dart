@@ -26,12 +26,12 @@ class AppColors {
       ? const []
       : const [BoxShadow(color: Color(0x0F1F1B24), blurRadius: 18, offset: Offset(0, 6))];
 
-  /// Kebalikan ink: pil terpilih pada navbar (putih di gelap, ink di terang).
-  static Color get inkInverse => _p(const Color(0xFF141414), Colors.white);
+  /// Kebalikan ink: pil terpilih pada navbar (putih di gelap, plum di terang).
+  static Color get inkInverse => _p(const Color(0xFF7A4F62), Colors.white);
 
   /// Warna "tinta": tombol, outline tebal, navbar, kartu utama.
   /// Selalu gelap sehingga teks putih (onInk) di atasnya tetap terbaca.
-  static Color get ink => _p(const Color(0xFF141414), const Color(0xFF34313D));
+  static Color get ink => _p(const Color(0xFF98677F), const Color(0xFF51404F));
 
   /// Teks utama dan teks sekunder (otomatis gelap di terang, terang di gelap).
   static Color get textDark => _p(const Color(0xFF1F1B24), const Color(0xFFF3EFF8));

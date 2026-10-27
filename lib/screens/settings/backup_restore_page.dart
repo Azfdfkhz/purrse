@@ -102,33 +102,34 @@ class _BackupRestorePageState
     setState(() => _loading = true);
 
     try {
-      await GoogleDriveService.instance.ensureConnected();
-
-      await BackupService.instance
-          .backupToGoogleDrive();
+      await BackupService.instance.backupToGoogleDrive();
 
       await _refreshStatus();
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Backup berhasil disimpan ke Google Drive.',
+          content: Text('Backup berhasil disimpan ke Google Drive.'),
+        ),
+      );
+    } on DriveAuthRequired catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message),
+          action: SnackBarAction(
+            label: 'Hubungkan',
+            onPressed: _connectGoogleDrive,
           ),
         ),
       );
     } catch (e) {
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Backup gagal: $e'),
-        ),
+        SnackBar(content: Text('Backup gagal: $e')),
       );
     } finally {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
+      if (mounted) setState(() => _loading = false);
     }
   }
 

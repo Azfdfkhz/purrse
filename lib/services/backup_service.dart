@@ -259,19 +259,19 @@ class BackupService {
   Future<void> backupToGoogleDrive({
     String appVersion = '1.2.2',
   }) async {
-    // Pastikan Google Drive terhubung
-    await _drive.ensureConnected();
+    // Coba pulihkan sesi secara senyap dulu; JANGAN munculkan picker otomatis.
+    // Jika gagal, lempar DriveAuthRequired agar UI yang menangani.
+    if (!await _drive.ensureConnected(interactive: false)) {
+      throw DriveAuthRequired(
+        'Google Drive belum terhubung. Hubungkan terlebih dahulu dari halaman Akun.',
+      );
+    }
 
     // Buat backup dari data lokal
-    final backupJson =
-    await createBackup(
-      appVersion: appVersion,
-    );
+    final backupJson = await createBackup(appVersion: appVersion);
 
     // Upload atau update file backup
-    await _drive.uploadOrUpdateBackup(
-      backupJson,
-    );
+    await _drive.uploadOrUpdateBackup(backupJson);
 
     // Dicatat HANYA setelah upload berhasil (tidak melapor sukses lebih awal).
     final prefs = await SharedPreferences.getInstance();
@@ -298,7 +298,12 @@ class BackupService {
 
   /// Unduh dan validasi backup tanpa mengubah data lokal.
   Future<BackupPreview> previewGoogleDriveBackup() async {
-    await _drive.ensureConnected();
+    // Senyap: tidak tampilkan picker. UI menangani bila tidak terhubung.
+    if (!await _drive.ensureConnected(interactive: false)) {
+      throw DriveAuthRequired(
+        'Google Drive belum terhubung. Hubungkan terlebih dahulu dari halaman Akun.',
+      );
+    }
     if (!await _drive.hasBackup()) {
       throw Exception(
         'Belum ada file backup di Google Drive akun ini. Pastikan akun Google '
@@ -355,17 +360,18 @@ class BackupService {
   // ============================================================
 
   Future<void> restoreFromGoogleDrive() async {
-    // Pastikan Google Drive terhubung
-    await _drive.ensureConnected();
+    // Senyap: tidak tampilkan picker. UI menangani bila tidak terhubung.
+    if (!await _drive.ensureConnected(interactive: false)) {
+      throw DriveAuthRequired(
+        'Google Drive belum terhubung. Hubungkan terlebih dahulu dari halaman Akun.',
+      );
+    }
 
     // Download backup dari Google Drive
-    final backupJson =
-    await _drive.downloadBackup();
+    final backupJson = await _drive.downloadBackup();
 
     // Validasi dan restore ke storage lokal
-    await restoreBackup(
-      backupJson,
-    );
+    await restoreBackup(backupJson);
   }
 
   // ============================================================

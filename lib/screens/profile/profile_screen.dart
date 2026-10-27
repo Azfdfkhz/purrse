@@ -12,6 +12,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/theme_controller.dart';
 import '../auth/auth_choice_screen.dart';
 import '../settings/backup_restore_page.dart';
+import '../../widgets/tour_guide.dart';
 import 'appearance_screen.dart';
 import 'category_management_screen.dart';
 import 'change_password_screen.dart';
@@ -141,6 +142,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _MenuRow(icon: Icons.palette_rounded, iconBg: iconBg, iconFg: iconFg, title: 'Tampilan', subtitle: 'Warna dan mode terang/gelap', onTap: () => _push(AppearanceScreen())),
                     _MenuRow(icon: Icons.notifications_active_rounded, iconBg: iconBg, iconFg: iconFg, title: 'Notifikasi', subtitle: 'Pengingat catat, tinjau, dan backup', onTap: () => _push(NotificationSettingsScreen())),
                     _MenuRow(icon: Icons.bookmark_rounded, iconBg: iconBg, iconFg: iconFg, title: 'Kategori pengeluaran', subtitle: 'Tambah, ubah, atau hapus kategori', onTap: () => _push(CategoryManagementScreen())),
+                    _MenuRow(
+                      icon: Icons.map_rounded,
+                      iconBg: iconBg,
+                      iconFg: iconFg,
+                      title: 'Panduan Aplikasi',
+                      subtitle: 'Tampilkan kembali tur pengenalan fitur',
+                      onTap: () => TourGuide.show(context),
+                    ),
                   ]),
                   SizedBox(height: 24),
                   _SectionLabel('Data'),

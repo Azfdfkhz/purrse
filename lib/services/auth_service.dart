@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_model.dart';
 import 'fcm_service.dart';
+import 'google_drive_service.dart';
 import 'storage_service.dart';
 import 'supabase_service.dart';
 import 'sync_service.dart';
@@ -167,6 +170,80 @@ class AuthService {
       return AuthResult(error: e.message);
     } catch (_) {
       return _offlineLogin(local, localOk);
+    }
+  }
+
+  // ---------- masuk dengan Google ----------
+  Future<AuthResult> signInWithGoogle() async {
+    try {
+      if (!GoogleSignIn.instance.supportsAuthenticate()) {
+        return const AuthResult(
+          error: 'Google Sign-In tidak didukung pada perangkat ini.',
+        );
+      }
+
+      final googleUser = await GoogleSignIn.instance.authenticate(
+        scopeHint: [GoogleDriveService.driveScope],
+      );
+
+      final email = _norm(googleUser.email);
+      final displayName = googleUser.displayName?.trim();
+      final username = (displayName != null && displayName.isNotEmpty)
+          ? displayName
+          : (email.contains('@') ? email.split('@').first : 'Pengguna');
+
+      var local = await _storage.findUserByEmail(email);
+
+      String? cloudUid;
+      if (_cloudAvailable) {
+        try {
+          final googleAuth = googleUser.authentication;
+          final idToken = googleAuth.idToken;
+          if (idToken != null) {
+            final res = await _supa.client!.auth.signInWithIdToken(
+              provider: OAuthProvider.google,
+              idToken: idToken,
+            );
+            if (res.user != null) {
+              cloudUid = res.user!.id;
+            }
+          }
+        } catch (e) {
+          debugPrint('Supabase Google Sign-In: $e');
+        }
+      }
+
+      if (local == null) {
+        local = await _storage.createLocalUser(
+          id: cloudUid,
+          username: username,
+          email: email,
+          password: '',
+          seedCategories: true,
+        );
+      } else if (cloudUid != null && local.id != cloudUid) {
+        await _storage.rekeyUser(local.id, cloudUid);
+        local = local.copyWithId(cloudUid);
+      }
+
+      await _storage.setCurrentUserId(local.id);
+
+      if (cloudUid != null) {
+        await _markLinked(cloudUid);
+        SyncService.instance.start();
+        unawaited(SyncService.instance.syncNow());
+      }
+
+      // Hubungkan akun Google ke GoogleDriveService untuk backup
+      await GoogleDriveService.instance.setAccount(googleUser);
+
+      return const AuthResult();
+    } catch (e) {
+      final msg = e.toString();
+      if (msg.contains('canceled') || msg.contains('cancelled') || msg.contains('aborted')) {
+        return const AuthResult();
+      }
+      return AuthResult(error: 'Gagal masuk dengan Google: $e');
     }
   }
 

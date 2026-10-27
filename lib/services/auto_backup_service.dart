@@ -90,7 +90,7 @@ class AutoBackupService extends ChangeNotifier {
     _set(AutoBackupState.running);
     try {
       final drive = GoogleDriveService.instance;
-      if (!drive.isSignedIn && !await drive.restoreSession()) {
+      if (!drive.isSignedIn) {
         _set(AutoBackupState.needsDrive);
         return;
       }

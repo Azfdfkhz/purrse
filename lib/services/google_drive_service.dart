@@ -45,6 +45,14 @@ class GoogleDriveService {
     await GoogleSignIn.instance.initialize(
       serverClientId: serverClientId,
     );
+    GoogleSignIn.instance.authenticationEvents.listen((event) {
+      if (event is GoogleSignInAuthenticationEventSignIn) {
+        _remember(event.user);
+      } else if (event is GoogleSignInAuthenticationEventSignOut) {
+        _forget();
+      }
+    });
+
     // Muat status "pernah terhubung" lebih dulu supaya UI tidak sempat
     // menampilkan "Hubungkan" sebelum sesi selesai dipulihkan.
     final prefs = await SharedPreferences.getInstance();
@@ -68,6 +76,9 @@ class GoogleDriveService {
 
   /// Email akun Drive (dari sesi aktif, atau yang tersimpan terakhir).
   String? get linkedEmail => _account?.email ?? _persistedEmail;
+
+  /// Simpan akun Google yang terautentikasi (misal dari login Google aplikasi).
+  Future<void> setAccount(GoogleSignInAccount account) => _remember(account);
 
   Future<void> _remember(GoogleSignInAccount account) async {
     _account = account;
@@ -98,6 +109,10 @@ class GoogleDriveService {
   // ============================================================
 
   Future<GoogleSignInAccount?> signIn() async {
+    // Jangan munculkan pemilih akun lagi bila akun Drive sebelumnya masih
+    // tersimpan dan dapat dipulihkan secara senyap.
+    if (_account != null) return _account;
+    if (await restoreSession()) return _account;
     if (!GoogleSignIn.instance.supportsAuthenticate()) {
       throw Exception(
         'Google Sign-In tidak didukung pada perangkat ini.',
@@ -126,10 +141,7 @@ class GoogleDriveService {
 
   Future<bool>? _restoring;
 
-  /// Pulihkan sesi tanpa dialog. Aman dipanggil berulang dan bersamaan:
-  /// semua pemanggil berbagi satu proses (sebelumnya dua panggilan
-  /// bersamaan membuat salah satunya gagal dan UI meminta login ulang).
-  /// Kegagalan TIDAK menghapus status "terhubung" — mungkin hanya offline.
+  /// Pulihkan sesi tanpa dialog berulang.
   Future<bool> restoreSession() {
     if (_account != null) return Future.value(true);
     return _restoring ??= _doRestore().whenComplete(() => _restoring = null);
@@ -137,19 +149,15 @@ class GoogleDriveService {
 
   Future<bool> _doRestore() async {
     if (!await wasConnected()) return false;
-    const waits = [0, 600, 1800];
-    for (final ms in waits) {
-      if (ms > 0) await Future.delayed(Duration(milliseconds: ms));
-      try {
-        final pending = GoogleSignIn.instance.attemptLightweightAuthentication();
-        final account = pending == null ? null : await pending;
-        if (account != null) {
-          await _remember(account);
-          return true;
-        }
-      } catch (_) {
-        // coba lagi; jangan putuskan status terhubung
+    try {
+      final pending = GoogleSignIn.instance.attemptLightweightAuthentication();
+      final account = pending == null ? null : await pending;
+      if (account != null) {
+        await _remember(account);
+        return true;
       }
+    } catch (_) {
+      // gagal pulihkan senyap; jangan hapus status terhubung
     }
     return false;
   }
