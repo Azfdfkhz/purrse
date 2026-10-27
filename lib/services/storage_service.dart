@@ -8,6 +8,9 @@ import '../models/user_model.dart';
 import '../models/expense_model.dart';
 import '../models/category_model.dart';
 import '../utils/password_hasher.dart';
+import 'fcm_service.dart';
+import 'supabase_service.dart';
+import 'sync_service.dart';
 
 /// Semua data disimpan secara lokal di memori HP menggunakan
 /// SharedPreferences (tanpa server / internet).
@@ -53,55 +56,124 @@ class StorageService {
     await prefs.setString(_kUsers, jsonEncode(users.map((e) => e.toJson()).toList()));
   }
 
-  /// Mengembalikan null jika berhasil, atau pesan error jika gagal.
-  Future<String?> register({
+  Future<UserModel?> findUserByEmail(String email) async {
+    final users = await _loadUsers();
+    final target = email.trim().toLowerCase();
+    for (final u in users) {
+      if (u.email.toLowerCase() == target) return u;
+    }
+    return null;
+  }
+
+  /// Membuat akun lokal. [id] diisi dengan auth.uid Supabase agar data lokal
+  /// dan cloud memakai pemilik yang sama (syarat RLS). Tanpa [id] -> UUID lokal.
+  Future<UserModel> createLocalUser({
+    String? id,
     required String username,
     required String email,
     required String password,
-  }) async {
-    final users = await _loadUsers();
-    final exists = users.any((u) => u.email.toLowerCase() == email.toLowerCase());
-    if (exists) return 'Email sudah terdaftar';
+    bool seedCategories = true,
+  }) =>
+      _serial(() async {
+        final users = await _loadUsers();
+        users.removeWhere((u) => u.email.toLowerCase() == email.toLowerCase());
+        final salt = PasswordHasher.generateSalt();
+        final user = UserModel(
+          id: id ?? _uuid.v4(),
+          username: username,
+          email: email,
+          passwordSalt: salt,
+          passwordHash: PasswordHasher.hash(password, salt),
+        );
+        users.add(user);
+        await _saveUsers(users);
+        if (seedCategories) await _seedDefaultCategories(user.id);
+        return user;
+      });
 
-    final salt = PasswordHasher.generateSalt();
-    final newUser = UserModel(
-      id: _uuid.v4(),
-      username: username,
-      email: email,
-      passwordSalt: salt,
-      passwordHash: PasswordHasher.hash(password, salt),
-    );
-    users.add(newUser);
-    await _saveUsers(users);
-    await _seedDefaultCategories(newUser.id);
-    await _setCurrentUser(newUser.id);
-    return null;
-  }
+  /// Memverifikasi password lokal (termasuk migrasi password teks biasa lama).
+  /// Mengembalikan true jika cocok.
+  Future<bool> verifyLocalPassword(UserModel user, String password) =>
+      _serial(() async {
+        if (user.passwordHash != null && user.passwordSalt != null) {
+          return PasswordHasher.verify(password, user.passwordSalt!, user.passwordHash!);
+        }
+        if (user.legacyPassword != null && user.legacyPassword == password) {
+          final users = await _loadUsers();
+          final idx = users.indexWhere((u) => u.id == user.id);
+          if (idx != -1) {
+            final salt = PasswordHasher.generateSalt();
+            users[idx] = users[idx].copyWith(
+              passwordSalt: salt,
+              passwordHash: PasswordHasher.hash(password, salt),
+              clearLegacyPassword: true,
+            );
+            await _saveUsers(users);
+          }
+          return true;
+        }
+        return false;
+      });
 
-  Future<String?> login({required String email, required String password}) async {
-    final users = await _loadUsers();
-    final idx = users.indexWhere((u) => u.email.toLowerCase() == email.toLowerCase());
-    if (idx == -1) return 'Email atau password salah';
-    final user = users[idx];
+  /// Atur password lokal (dipakai setelah login cloud berhasil / ganti password).
+  Future<void> setLocalPassword(String userId, String password) => _serial(() async {
+        final users = await _loadUsers();
+        final idx = users.indexWhere((u) => u.id == userId);
+        if (idx == -1) return;
+        final salt = PasswordHasher.generateSalt();
+        users[idx] = users[idx].copyWith(
+          passwordSalt: salt,
+          passwordHash: PasswordHasher.hash(password, salt),
+          clearLegacyPassword: true,
+        );
+        await _saveUsers(users);
+      });
 
-    var ok = false;
-    if (user.passwordHash != null && user.passwordSalt != null) {
-      ok = PasswordHasher.verify(password, user.passwordSalt!, user.passwordHash!);
-    } else if (user.legacyPassword != null && user.legacyPassword == password) {
-      // Migrasi otomatis dari password teks biasa (<= 1.1.0) ke hash.
-      final salt = PasswordHasher.generateSalt();
-      users[idx] = user.copyWith(
-        passwordSalt: salt,
-        passwordHash: PasswordHasher.hash(password, salt),
-        clearLegacyPassword: true,
-      );
-      await _saveUsers(users);
-      ok = true;
-    }
-    if (!ok) return 'Email atau password salah';
-    await _setCurrentUser(user.id);
-    return null;
-  }
+  Future<void> setCurrentUserId(String id) => _setCurrentUser(id);
+
+  /// MIGRASI: pindahkan seluruh data akun lokal [oldId] ke pemilik baru [newId]
+  /// (auth.uid Supabase). Transaksi dan kategori ditulis ulang dengan pemilik
+  /// baru lalu ditandai belum tersinkron. Jika [newId] sudah punya data lokal
+  /// (mis. login ulang), data digabung berdasarkan ID — tidak ada yang ditimpa
+  /// kecuali versi yang lebih baru (updatedAt).
+  Future<void> rekeyUser(String oldId, String newId) => _serial(() async {
+        if (oldId == newId) return;
+        final prefs = await _prefs;
+        final users = await _loadUsers();
+        final idx = users.indexWhere((u) => u.id == oldId);
+        if (idx != -1) {
+          users.removeWhere((u) => u.id == newId);
+          users[idx] = users[idx].copyWithId(newId);
+          await _saveUsers(users);
+        }
+
+        // Transaksi
+        final oldExp = await _loadAllExpenses(oldId);
+        final byId = {for (final e in await _loadAllExpenses(newId)) e.id: e};
+        for (final e in oldExp) {
+          final moved = e.copyWith(userId: newId, syncState: SyncState.pending);
+          final cur = byId[e.id];
+          if (cur == null || moved.updatedAt.isAfter(cur.updatedAt)) byId[e.id] = moved;
+        }
+        await _saveAllExpenses(newId, byId.values.toList());
+        await prefs.remove('$_kExpensesPrefix$oldId');
+
+        // Kategori
+        final oldCats = await _loadAllCategories(oldId, seed: false);
+        final catById = {for (final c in await _loadAllCategories(newId, seed: false)) c.id: c};
+        final stamp = DateTime.now().toUtc();
+        for (final c in oldCats) {
+          final cur = catById[c.id];
+          if (cur == null) catById[c.id] = c.copyWith(updatedAt: c.updatedAt ?? stamp);
+        }
+        if (catById.isNotEmpty) await _saveAllCategories(newId, catById.values.toList());
+        await prefs.remove('$_kCategoriesPrefix$oldId');
+
+        if (prefs.getString(_kCurrentUser) == oldId) {
+          await prefs.setString(_kCurrentUser, newId);
+        }
+        await prefs.remove('sync_cursor_$oldId');
+      });
 
   Future<void> _setCurrentUser(String id) async {
     final prefs = await _prefs;
@@ -109,6 +181,10 @@ class StorageService {
   }
 
   Future<void> logout() async {
+    // Urutan penting: lepas token notifikasi selagi sesi cloud masih ada.
+    await FcmService.instance.unregister();
+    SyncService.instance.stop();
+    await SupabaseService.instance.signOut();
     final prefs = await _prefs;
     await prefs.remove(_kCurrentUser);
   }
@@ -127,41 +203,71 @@ class StorageService {
 
   // ---------- Categories ----------
   Future<void> _seedDefaultCategories(String userId) async {
+    final now = DateTime.now().toUtc();
     final defaults = [
-      CategoryModel(id: _uuid.v4(), name: 'Makanan', color: Color(0xFF8FC1E8), icon: Icons.restaurant),
-      CategoryModel(id: _uuid.v4(), name: 'Hiburan', color: Color(0xFF8FDCC9), icon: Icons.movie_filter),
-      CategoryModel(id: _uuid.v4(), name: 'Transport', color: Color(0xFFF5C77E), icon: Icons.directions_car),
-      CategoryModel(id: _uuid.v4(), name: 'Lainnya', color: Color(0xFFF29C93), icon: Icons.account_balance_wallet),
+      CategoryModel(id: _uuid.v4(), name: 'Makanan', color: Color(0xFF8FC1E8), icon: Icons.restaurant, updatedAt: now),
+      CategoryModel(id: _uuid.v4(), name: 'Hiburan', color: Color(0xFF8FDCC9), icon: Icons.movie_filter, updatedAt: now),
+      CategoryModel(id: _uuid.v4(), name: 'Transport', color: Color(0xFFF5C77E), icon: Icons.directions_car, updatedAt: now),
+      CategoryModel(id: _uuid.v4(), name: 'Lainnya', color: Color(0xFFF29C93), icon: Icons.account_balance_wallet, updatedAt: now),
     ];
+    await _saveAllCategories(userId, defaults);
+  }
+
+  /// Semua kategori termasuk yang sudah dihapus (tombstone).
+  Future<List<CategoryModel>> _loadAllCategories(String userId, {bool seed = true}) async {
+    final prefs = await _prefs;
+    final raw = prefs.getString('$_kCategoriesPrefix$userId');
+    if (raw == null) {
+      if (!seed) return [];
+      await _seedDefaultCategories(userId);
+      return _loadAllCategories(userId, seed: false);
+    }
+    final out = <CategoryModel>[];
+    for (final e in jsonDecode(raw) as List) {
+      try {
+        out.add(CategoryModel.fromJson(Map<String, dynamic>.from(e as Map)));
+      } catch (_) {}
+    }
+    return out;
+  }
+
+  Future<void> _saveAllCategories(String userId, List<CategoryModel> all) async {
     final prefs = await _prefs;
     await prefs.setString(
       '$_kCategoriesPrefix$userId',
-      jsonEncode(defaults.map((e) => e.toJson()).toList()),
+      jsonEncode(all.map((e) => e.toJson()).toList()),
     );
   }
 
   Future<List<CategoryModel>> getCategories(String userId) async {
     final prefs = await _prefs;
-    final raw = prefs.getString('$_kCategoriesPrefix$userId');
-    if (raw == null) {
-      await _seedDefaultCategories(userId);
-      return getCategories(userId);
+    if (prefs.getString('$_kCategoriesPrefix$userId') == null) {
+      // Banyak layar memanggil ini bersamaan saat start: seed hanya sekali.
+      await _serial(() async {
+        if (prefs.getString('$_kCategoriesPrefix$userId') == null) {
+          await _seedDefaultCategories(userId);
+        }
+      });
     }
-    final list = jsonDecode(raw) as List;
-    return list.map((e) => CategoryModel.fromJson(e)).toList();
+    final all = await _loadAllCategories(userId, seed: false);
+    return all.where((c) => !c.isDeleted).toList();
   }
 
-  Future<CategoryModel> addCategory(String userId, String name, Color color, IconData icon) async {
-    final categories = await getCategories(userId);
-    final newCat = CategoryModel(id: _uuid.v4(), name: name, color: color, icon: icon);
-    categories.add(newCat);
-    final prefs = await _prefs;
-    await prefs.setString(
-      '$_kCategoriesPrefix$userId',
-      jsonEncode(categories.map((e) => e.toJson()).toList()),
-    );
-    return newCat;
-  }
+  Future<CategoryModel> addCategory(String userId, String name, Color color, IconData icon) =>
+      _serial(() async {
+        final categories = await _loadAllCategories(userId);
+        final newCat = CategoryModel(
+          id: _uuid.v4(),
+          name: name,
+          color: color,
+          icon: icon,
+          updatedAt: DateTime.now().toUtc(),
+        );
+        categories.add(newCat);
+        await _saveAllCategories(userId, categories);
+        SyncService.instance.markDirty();
+        return newCat;
+      });
 
   // ---------- Expenses ----------
   Future<List<ExpenseModel>> _loadAllExpenses(String userId) async {
@@ -207,6 +313,7 @@ class StorageService {
         all.add(expense);
         await _saveAllExpenses(expense.userId, all);
         AutoBackupService.instance.markDirty();
+        SyncService.instance.markDirty();
       });
 
   /// Ubah satu transaksi. [change] menerima data terbaru dan
@@ -223,6 +330,7 @@ class StorageService {
         final updated = change(all[idx]);
         all[idx] = updated;
         await _saveAllExpenses(userId, all);
+        if (updated.syncState == SyncState.pending) SyncService.instance.markDirty();
         return updated;
       });
 
@@ -330,27 +438,30 @@ class StorageService {
   }
 
   // ---------- Category management ----------
-  Future<void> updateCategory(String userId, CategoryModel category) async {
-    final categories = await getCategories(userId);
-    final idx = categories.indexWhere((c) => c.id == category.id);
-    if (idx == -1) return;
-    categories[idx] = category;
-    final prefs = await _prefs;
-    await prefs.setString(
-      '$_kCategoriesPrefix$userId',
-      jsonEncode(categories.map((e) => e.toJson()).toList()),
-    );
-  }
+  Future<void> updateCategory(String userId, CategoryModel category) => _serial(() async {
+        final categories = await _loadAllCategories(userId);
+        final idx = categories.indexWhere((c) => c.id == category.id);
+        if (idx == -1) return;
+        categories[idx] = categories[idx].copyWith(
+          name: category.name,
+          color: category.color,
+          icon: category.icon,
+          updatedAt: DateTime.now().toUtc(),
+        );
+        await _saveAllCategories(userId, categories);
+        SyncService.instance.markDirty();
+      });
 
-  Future<void> deleteCategory(String userId, String categoryId) async {
-    final categories = await getCategories(userId);
-    categories.removeWhere((c) => c.id == categoryId);
-    final prefs = await _prefs;
-    await prefs.setString(
-      '$_kCategoriesPrefix$userId',
-      jsonEncode(categories.map((e) => e.toJson()).toList()),
-    );
-  }
+  /// Hapus lunak (tombstone) agar penghapusan ikut tersinkron.
+  Future<void> deleteCategory(String userId, String categoryId) => _serial(() async {
+        final categories = await _loadAllCategories(userId);
+        final idx = categories.indexWhere((c) => c.id == categoryId);
+        if (idx == -1) return;
+        final now = DateTime.now().toUtc();
+        categories[idx] = categories[idx].copyWith(deletedAt: now, updatedAt: now);
+        await _saveAllCategories(userId, categories);
+        SyncService.instance.markDirty();
+      });
 
   // ---------- Tampilan (tema warna) ----------
   Future<void> setAccentColor(int colorValue) async {
@@ -365,13 +476,15 @@ class StorageService {
 
   // ---------- Backup / Restore ----------
 
+  /// Restore: isi backup menjadi kondisi baru. Agar konsisten dengan sinkronisasi,
+  /// transaksi yang ada di perangkat tetapi tidak ada di backup diberi tombstone
+  /// (bukan dihapus diam-diam), dan semua data hasil restore ditandai belum
+  /// tersinkron dengan updatedAt baru sehingga menang atas versi cloud.
   Future<void> replaceExpensesFromBackup(
     String userId,
     List<Map<String, dynamic>> expenses,
   ) =>
       _serial(() async {
-        // Validasi & normalisasi sebelum menimpa data lama. ID unik,
-        // jadi file backup yang berisi duplikat tidak membuat transaksi ganda.
         final byId = <String, ExpenseModel>{};
         for (final json in expenses) {
           try {
@@ -382,20 +495,191 @@ class StorageService {
         if (expenses.isNotEmpty && byId.isEmpty) {
           throw FormatException('Isi backup tidak valid, data tidak diubah.');
         }
-        await _saveAllExpenses(userId, byId.values.toList());
+        final now = DateTime.now().toUtc();
+        final result = <String, ExpenseModel>{};
+        for (final e in byId.values) {
+          result[e.id] = e.copyWith(
+            userId: userId,
+            updatedAt: now,
+            clearDeletedAt: true,
+            syncState: SyncState.pending,
+          );
+        }
+        for (final e in await _loadAllExpenses(userId)) {
+          if (result.containsKey(e.id)) continue;
+          result[e.id] = e.isDeleted
+              ? e
+              : e.copyWith(deletedAt: now, updatedAt: now, syncState: SyncState.pending);
+        }
+        await _saveAllExpenses(userId, result.values.toList());
+        SyncService.instance.markDirty();
       });
 
   Future<void> replaceCategoriesFromBackup(
-      String userId,
-      List<Map<String, dynamic>> categories,
-      ) async {
-    final prefs = await _prefs;
+    String userId,
+    List<Map<String, dynamic>> categories,
+  ) =>
+      _serial(() async {
+        final now = DateTime.now().toUtc();
+        final restored = <String, CategoryModel>{};
+        for (final json in categories) {
+          try {
+            final c = CategoryModel.fromJson(Map<String, dynamic>.from(json));
+            restored[c.id] = c.copyWith(updatedAt: now, clearDeletedAt: true);
+          } catch (_) {}
+        }
+        for (final c in await _loadAllCategories(userId, seed: false)) {
+          if (restored.containsKey(c.id)) continue;
+          restored[c.id] = c.isDeleted ? c : c.copyWith(deletedAt: now, updatedAt: now);
+        }
+        await _saveAllCategories(userId, restored.values.toList());
+        SyncService.instance.markDirty();
+      });
 
-    await prefs.setString(
-      '$_kCategoriesPrefix$userId',
-      jsonEncode(categories),
-    );
-  }
+  // ---------- Sinkronisasi (dipakai SyncService) ----------
+
+  /// Semua transaksi termasuk tombstone.
+  Future<List<ExpenseModel>> getAllExpensesRaw(String userId) => _loadAllExpenses(userId);
+
+  Future<List<CategoryModel>> getAllCategoriesRaw(String userId) =>
+      _loadAllCategories(userId, seed: false);
+
+  /// Beri updatedAt pada kategori lama yang belum punya (data < 1.3.0).
+  Future<void> stampLegacyCategories(String userId) => _serial(() async {
+        final all = await _loadAllCategories(userId, seed: false);
+        if (all.every((c) => c.updatedAt != null)) return;
+        final now = DateTime.now().toUtc();
+        await _saveAllCategories(
+          userId,
+          [for (final c in all) c.updatedAt == null ? c.copyWith(updatedAt: now) : c],
+        );
+      });
+
+  /// Tandai tersinkron hanya bila transaksi tidak berubah sejak dikirim.
+  Future<void> markExpensesSynced(String userId, Map<String, DateTime> pushed) =>
+      _serial(() async {
+        final all = await _loadAllExpenses(userId);
+        var changed = false;
+        for (var i = 0; i < all.length; i++) {
+          final sentAt = pushed[all[i].id];
+          if (sentAt != null &&
+              all[i].syncState != SyncState.synced &&
+              !all[i].updatedAt.isAfter(sentAt)) {
+            all[i] = all[i].copyWith(syncState: SyncState.synced);
+            changed = true;
+          }
+        }
+        if (changed) await _saveAllExpenses(userId, all);
+      });
+
+  /// Gabungkan data cloud ke lokal (last-write-wins per updatedAt).
+  /// Mengembalikan true bila ada data lokal yang berubah.
+  Future<bool> mergeRemote(
+    String userId, {
+    required List<ExpenseModel> expenses,
+    required List<CategoryModel> categories,
+    required bool fullPull,
+  }) =>
+      _serial(() async {
+        var changed = false;
+
+        // ---- Kategori ----
+        final cats = await _loadAllCategories(userId, seed: false);
+        final catIdx = {for (var i = 0; i < cats.length; i++) cats[i].id: i};
+        final remap = <String, String>{}; // id lokal -> id cloud (kategori kembar)
+
+        if (fullPull) {
+          // Perangkat baru / login pertama: kategori bawaan lokal (ID acak) yang
+          // namanya sama dengan kategori cloud dianggap kembar, bukan data baru.
+          final remoteIds = {for (final c in categories) c.id};
+          String norm(String n) => n.trim().toLowerCase();
+          final remoteByName = {
+            for (final c in categories)
+              if (!c.isDeleted) norm(c.name): c,
+          };
+          for (final c in List<CategoryModel>.from(cats)) {
+            if (c.isDeleted || remoteIds.contains(c.id)) continue;
+            final twin = remoteByName[norm(c.name)];
+            if (twin != null) {
+              remap[c.id] = twin.id;
+              cats.remove(c);
+              changed = true;
+            }
+          }
+          catIdx
+            ..clear()
+            ..addAll({for (var i = 0; i < cats.length; i++) cats[i].id: i});
+        }
+
+        for (final r in categories) {
+          final i = catIdx[r.id];
+          if (i == null) {
+            if (r.isDeleted) continue;
+            cats.add(r);
+            catIdx[r.id] = cats.length - 1;
+            changed = true;
+          } else {
+            final l = cats[i];
+            final lt = l.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+            if (r.updatedAt != null && r.updatedAt!.isAfter(lt)) {
+              cats[i] = r;
+              changed = true;
+            }
+          }
+        }
+        if (changed) await _saveAllCategories(userId, cats);
+
+        // ---- Transaksi ----
+        final all = await _loadAllExpenses(userId);
+        final idx = {for (var i = 0; i < all.length; i++) all[i].id: i};
+        var expChanged = false;
+
+        if (remap.isNotEmpty) {
+          for (var i = 0; i < all.length; i++) {
+            final to = remap[all[i].categoryId];
+            if (to != null) {
+              all[i] = all[i].copyWith(
+                categoryId: to,
+                updatedAt: DateTime.now().toUtc(),
+                syncState: SyncState.pending,
+              );
+              expChanged = true;
+            }
+          }
+        }
+
+        for (final r in expenses) {
+          final i = idx[r.id];
+          if (i == null) {
+            if (r.isDeleted) continue;
+            all.add(r);
+            idx[r.id] = all.length - 1;
+            expChanged = true;
+            continue;
+          }
+          var l = all[i];
+          if (r.updatedAt.isAfter(l.updatedAt)) {
+            l = l.copyWith(
+              categoryId: remap[r.categoryId] ?? r.categoryId,
+              amount: r.amount,
+              date: r.date,
+              description: r.description,
+              updatedAt: r.updatedAt,
+              deletedAt: r.deletedAt,
+              clearDeletedAt: r.deletedAt == null,
+              syncState: SyncState.synced,
+            );
+            expChanged = true;
+          }
+          // Referensi foto di Drive selalu diadopsi bila perangkat ini belum punya.
+          if (r.driveFileId != null && l.driveFileId == null) {
+            l = l.copyWith(driveFileId: r.driveFileId, uploadStatus: UploadStatus.uploaded);
+            expChanged = true;
+          }
+          all[i] = l;
+        }
+        if (expChanged) await _saveAllExpenses(userId, all);
+
+        return changed || expChanged;
+      });
 }
-
-

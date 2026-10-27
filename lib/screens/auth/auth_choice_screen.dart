@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/auth_scaffold.dart';
 import '../../widgets/ui_kit.dart';
 import 'register_screen.dart';
 import 'login_screen.dart';
@@ -12,24 +13,26 @@ class AuthChoiceScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: Padding(
+        child: LayoutBuilder(
+          builder: (context, c) => SingleChildScrollView(
           padding: EdgeInsets.symmetric(horizontal: 28),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: c.maxHeight),
+            child: IntrinsicHeight(
           child: Column(
             children: [
-              SizedBox(height: 60),
+              SizedBox(height: 32),
               Container(
-                height: 260,
+                height: 240,
                 width: double.infinity,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(28),
-                ),
                 alignment: Alignment.center,
-                padding: EdgeInsets.all(24),
+                padding: EdgeInsets.all(16),
                 child: Image.asset(
                   'assets/images/Kucingkucing.png',
-                    width: 200,
-                    height: 200,
-                    fit: BoxFit.contain,
+                  semanticLabel: 'Ilustrasi kucing PurssApp',
+                  width: 200,
+                  height: 200,
+                  fit: BoxFit.contain,
                 ),
               ),
               Align(
@@ -56,23 +59,16 @@ class AuthChoiceScreen extends StatelessWidget {
                 ),
               ),
               SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('Sudah memiliki akun? ', style: TextStyle(color: AppColors.textDark)),
-                  GestureDetector(
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => LoginScreen()),
-                    ),
-                    child: Text(
-                      'Masuk',
-                      style: TextStyle(color: AppColors.ink, fontWeight: FontWeight.w800, decoration: TextDecoration.underline),
-                    ),
-                  ),
-                ],
+              AuthFooterLink(
+                prompt: 'Sudah memiliki akun?',
+                action: 'Masuk',
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => LoginScreen())),
               ),
               SizedBox(height: 32),
             ],
+          ),
+          ),
+          ),
           ),
         ),
       ),

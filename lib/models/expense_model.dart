@@ -96,6 +96,7 @@ class ExpenseModel {
   }
 
   ExpenseModel copyWith({
+    String? userId,
     String? categoryId,
     double? amount,
     DateTime? date,
@@ -104,6 +105,7 @@ class ExpenseModel {
     bool clearProof = false,
     DateTime? updatedAt,
     DateTime? deletedAt,
+    bool clearDeletedAt = false,
     String? syncState,
     String? driveFileId,
     bool clearDriveFileId = false,
@@ -117,7 +119,7 @@ class ExpenseModel {
     final newProof = clearProof ? null : (proofPath ?? this.proofPath);
     return ExpenseModel(
       id: id,
-      userId: userId,
+      userId: userId ?? this.userId,
       categoryId: categoryId ?? this.categoryId,
       amount: amount ?? this.amount,
       date: date ?? this.date,
@@ -125,7 +127,7 @@ class ExpenseModel {
       proofPath: newProof,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
-      deletedAt: deletedAt ?? this.deletedAt,
+      deletedAt: clearDeletedAt ? null : (deletedAt ?? this.deletedAt),
       syncState: syncState ?? this.syncState,
       driveFileId: clearDriveFileId ? null : (driveFileId ?? this.driveFileId),
       uploadStatus: uploadStatus ??

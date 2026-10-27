@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import '../../services/storage_service.dart';
-import '../../theme/app_colors.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/app_text_field.dart';
+import '../../widgets/auth_scaffold.dart';
+import '../../widgets/ui_kit.dart';
 import '../shell/navbar_shell.dart';
+import 'forgot_password_screen.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -15,110 +17,101 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _email = TextEditingController();
   final _password = TextEditingController();
+  final _passwordFocus = FocusNode();
   bool _obscure = true;
   bool _loading = false;
   String? _error;
 
+  @override
+  void dispose() {
+    _email.dispose();
+    _password.dispose();
+    _passwordFocus.dispose();
+    super.dispose();
+  }
+
   Future<void> _submit() async {
+    if (_loading) return;
     if (_email.text.trim().isEmpty || _password.text.isEmpty) {
       setState(() => _error = 'Email dan password wajib diisi');
       return;
     }
+    FocusScope.of(context).unfocus();
     setState(() {
       _loading = true;
       _error = null;
     });
-    final err = await StorageService.instance.login(email: _email.text.trim(), password: _password.text);
+    final res = await AuthService.instance.login(email: _email.text, password: _password.text);
     if (!mounted) return;
     setState(() => _loading = false);
-    if (err != null) {
-      setState(() => _error = err);
+    if (!res.ok) {
+      setState(() => _error = res.error ?? res.info);
       return;
     }
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => NavbarShell()),
-      (route) => false,
-    );
+    final messenger = ScaffoldMessenger.of(context);
+    final nav = Navigator.of(context);
+    nav.pushAndRemoveUntil(MaterialPageRoute(builder: (_) => NavbarShell()), (route) => false);
+    if (res.notice != null) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(res.notice!), duration: Duration(seconds: 8)));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              IconButton(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: Icon(Icons.arrow_back_ios_new_rounded),
-              ),
-              SizedBox(height: 8),
-              Text('Selamat Datang', style: Theme.of(context).textTheme.headlineMedium),
-              SizedBox(height: 6),
-              Text('Masuk untuk melanjutkan', style: TextStyle(color: AppColors.textGrey)),
-              SizedBox(height: 28),
-              AppTextField(
-                label: 'Email',
-                controller: _email,
-                hint: 'contoh@email.com',
-                keyboardType: TextInputType.emailAddress,
-              ),
-              SizedBox(height: 18),
-              AppTextField(
-                label: 'Password',
-                controller: _password,
-                hint: '********',
-                obscureText: _obscure,
-                suffixIcon: IconButton(
-                  icon: Icon(_obscure ? Icons.visibility_off_rounded : Icons.visibility_rounded),
-                  onPressed: () => setState(() => _obscure = !_obscure),
-                ),
-              ),
-              if (_error != null) ...[
-                SizedBox(height: 12),
-                Text(_error!, style: TextStyle(color: Colors.red)),
-              ],
-              SizedBox(height: 28),
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.ink,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                  ),
-                  onPressed: _loading ? null : _submit,
-                  child: _loading
-                      ? SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
-                      : Text('Masuk', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-                ),
-              ),
-              SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('Belum memiliki akun? '),
-                  GestureDetector(
-                    onTap: () => Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(builder: (_) => RegisterScreen()),
-                    ),
-                    child: Text('Daftar', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700)),
-                  ),
-                ],
-              ),
-            ],
+    return AuthScaffold(
+      title: 'Selamat Datang',
+      subtitle: 'Masuk untuk melanjutkan',
+      footer: AuthFooterLink(
+        prompt: 'Belum memiliki akun?',
+        action: 'Daftar',
+        onTap: () => Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => RegisterScreen())),
+      ),
+      children: [
+        AppTextField(
+          label: 'Email',
+          controller: _email,
+          hint: 'contoh@email.com',
+          keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.next,
+          autofillHints: [AutofillHints.email],
+          onSubmitted: (_) => _passwordFocus.requestFocus(),
+          enabled: !_loading,
+        ),
+        SizedBox(height: 18),
+        AppTextField(
+          label: 'Password',
+          controller: _password,
+          focusNode: _passwordFocus,
+          hint: 'Masukkan password',
+          obscureText: _obscure,
+          textInputAction: TextInputAction.done,
+          autofillHints: [AutofillHints.password],
+          onSubmitted: (_) => _submit(),
+          enabled: !_loading,
+          suffixIcon: IconButton(
+            tooltip: _obscure ? 'Tampilkan password' : 'Sembunyikan password',
+            icon: Icon(_obscure ? Icons.visibility_off_rounded : Icons.visibility_rounded),
+            onPressed: () => setState(() => _obscure = !_obscure),
           ),
         ),
-      ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: _loading
+                ? null
+                : () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ForgotPasswordScreen())),
+            child: Text('Lupa password?'),
+          ),
+        ),
+        if (_error != null) ...[
+          SizedBox(height: 4),
+          StatusBanner(_error!),
+        ],
+        SizedBox(height: 20),
+        InkButton(label: 'Masuk', loading: _loading, onPressed: _submit),
+      ],
     );
   }
 }

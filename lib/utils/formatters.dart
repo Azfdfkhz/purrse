@@ -26,6 +26,19 @@ class Formatters {
     return DateFormat('dd/MM/yy').format(date);
   }
 
+  /// "27 Oktober 2026"
+  static String longDate(DateTime d) => '${d.day} ${monthNames[d.month - 1]} ${d.year}';
+
+  /// "Hari ini" / "Kemarin" / "27 Oktober 2026"
+  static String relativeDay(DateTime d, {DateTime? now}) {
+    final n = now ?? DateTime.now();
+    final today = DateTime(n.year, n.month, n.day);
+    final diff = today.difference(DateTime(d.year, d.month, d.day)).inDays;
+    if (diff == 0) return 'Hari ini';
+    if (diff == 1) return 'Kemarin';
+    return longDate(d);
+  }
+
   static const List<String> monthNames = [
     'Januari',
     'Februari',

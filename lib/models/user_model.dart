@@ -39,6 +39,16 @@ class UserModel {
         avatarPath: avatarPath ?? this.avatarPath,
       );
 
+  UserModel copyWithId(String newId) => UserModel(
+        id: newId,
+        username: username,
+        email: email,
+        passwordHash: passwordHash,
+        passwordSalt: passwordSalt,
+        legacyPassword: legacyPassword,
+        avatarPath: avatarPath,
+      );
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'username': username,

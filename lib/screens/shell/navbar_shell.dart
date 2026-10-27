@@ -8,7 +8,9 @@ import '../laporan/laporan_screen.dart';
 import '../profile/profile_screen.dart';
 import '../expense/add_expense_modal.dart';
 import '../../services/proof_upload_service.dart';
+import '../../services/auth_service.dart';
 import '../../services/storage_service.dart';
+import '../../services/sync_service.dart';
 
 class NavbarShell extends StatefulWidget {
   const NavbarShell({super.key});
@@ -23,10 +25,25 @@ class _NavbarShellState extends State<NavbarShell> {
   final GlobalKey<TransaksiScreenState> _transaksiKey = GlobalKey<TransaksiScreenState>();
   final GlobalKey<LaporanScreenState> _laporanKey = GlobalKey<LaporanScreenState>();
 
+  int _seenRevision = SyncService.instance.dataRevision;
+
   @override
   void initState() {
     super.initState();
     _startUploads();
+    SyncService.instance.start();
+    SyncService.instance.addListener(_onSyncChanged);
+    AuthService.instance.afterLogin();
+  }
+
+  /// Data baru dari cloud: muat ulang layar yang menampilkan data.
+  void _onSyncChanged() {
+    final rev = SyncService.instance.dataRevision;
+    if (rev == _seenRevision) return;
+    _seenRevision = rev;
+    _berandaKey.currentState?.reload();
+    _transaksiKey.currentState?.reload();
+    _laporanKey.currentState?.reload();
   }
 
   Future<void> _startUploads() async {
@@ -36,6 +53,7 @@ class _NavbarShellState extends State<NavbarShell> {
 
   @override
   void dispose() {
+    SyncService.instance.removeListener(_onSyncChanged);
     ProofUploadService.instance.stop();
     super.dispose();
   }

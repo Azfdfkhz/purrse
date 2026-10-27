@@ -131,14 +131,41 @@ class TransaksiScreenState extends State<TransaksiScreen> {
     await reload();
   }
 
-  String _dateLabel(DateTime date) => Formatters.date(date);
+  bool get _hasFilter => _categoryId != null || _selectedDate != null;
+
+  void _resetFilters() => setState(() {
+        _categoryId = null;
+        _selectedDate = null;
+      });
+
+  /// Daftar bergrup per tanggal: header hari (+ total hari) lalu kartu transaksi.
+  List<Object> _buildRows(List<ExpenseModel> items) {
+    final totals = <String, double>{};
+    for (final e in items) {
+      final k = ExpenseModel.dateKey(e.date);
+      totals[k] = (totals[k] ?? 0) + e.amount;
+    }
+    final rows = <Object>[];
+    String? current;
+    for (final e in items) {
+      final k = ExpenseModel.dateKey(e.date);
+      if (k != current) {
+        current = k;
+        rows.add(_DayHeader(e.date, totals[k] ?? 0));
+      }
+      rows.add(e);
+    }
+    return rows;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
+    final items = _filteredExpenses;
+    final rows = _buildRows(items);
+    final total = items.fold<double>(0, (sum, e) => sum + e.amount);
 
     return RefreshIndicator(
-      color: primary,
+      color: AppColors.textDark,
       onRefresh: reload,
       child: CustomScrollView(
         physics: AlwaysScrollableScrollPhysics(),
@@ -148,34 +175,30 @@ class TransaksiScreenState extends State<TransaksiScreen> {
             backgroundColor: AppColors.background,
             surfaceTintColor: Colors.transparent,
             title: Text('Transaksi', style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.textDark)),
-            actions: [
-              IconButton(
-                onPressed: _pickDate,
-                tooltip: 'Filter tanggal',
-                icon: Icon(Icons.calendar_month_rounded, color: _selectedDate == null ? AppColors.textDark : primary),
-              ),
-            ],
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: EdgeInsets.fromLTRB(20, 4, 20, 8),
+              padding: EdgeInsets.fromLTRB(20, 0, 20, 4),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Foto transaksi', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.textDark)),
-                  SizedBox(height: 4),
-                  Text('Lihat bukti pengeluaran berdasarkan kategori dan tanggal.', style: TextStyle(color: AppColors.textGrey, fontSize: 13)),
-                  SizedBox(height: 18),
+                  // Filter: tanggal + kategori dalam satu baris yang bisa digeser.
                   SizedBox(
-                    height: 38,
+                    height: 48,
                     child: ListView(
                       scrollDirection: Axis.horizontal,
                       children: [
+                        _DateChip(
+                          label: _selectedDate == null ? 'Tanggal' : Formatters.date(_selectedDate!),
+                          active: _selectedDate != null,
+                          onTap: _pickDate,
+                          onClear: _clearDate,
+                        ),
+                        SizedBox(width: 8),
                         _FilterChip(
                           label: 'Semua',
                           selected: _categoryId == null,
                           onTap: () => setState(() => _categoryId = null),
-                          color: primary,
                         ),
                         ..._categories.map((category) => Padding(
                               padding: EdgeInsets.only(left: 8),
@@ -183,43 +206,66 @@ class TransaksiScreenState extends State<TransaksiScreen> {
                                 label: category.name,
                                 selected: _categoryId == category.id,
                                 onTap: () => setState(() => _categoryId = category.id),
-                                color: primary,
                               ),
                             )),
                       ],
                     ),
                   ),
-                  if (_selectedDate != null) ...[
-                    SizedBox(height: 10),
-                    InputChip(
-                      label: Text(_dateLabel(_selectedDate!)),
-                      avatar: Icon(Icons.event_rounded, size: 17, color: primary),
-                      onDeleted: _clearDate,
-                      deleteIconColor: primary,
+                  if (!_loading && items.isNotEmpty) ...[
+                    SizedBox(height: 6),
+                    Text(
+                      '${items.length} foto bukti · ${Formatters.rupiah(total)}',
+                      style: TextStyle(color: AppColors.textGrey, fontSize: 13, fontWeight: FontWeight.w600),
                     ),
                   ],
-                  SizedBox(height: 12),
+                  SizedBox(height: 8),
                 ],
               ),
             ),
           ),
           if (_loading)
-            SliverFillRemaining(child: Center(child: CircularProgressIndicator()))
-          else if (_filteredExpenses.isEmpty)
-            SliverFillRemaining(child: _EmptyTransactions())
+            SliverFillRemaining(hasScrollBody: false, child: Center(child: CircularProgressIndicator()))
+          else if (items.isEmpty)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: _EmptyTransactions(filtered: _hasFilter, onReset: _resetFilters),
+            )
           else
             SliverPadding(
-              padding: EdgeInsets.fromLTRB(20, 4, 20, 28),
+              padding: EdgeInsets.fromLTRB(20, 4, 20, 120), // ruang agar tidak tertutup navbar
               sliver: SliverList.builder(
-                itemCount: _filteredExpenses.length,
+                itemCount: rows.length,
                 itemBuilder: (context, index) {
-                  final expense = _filteredExpenses[index];
-                  final category = _categoryFor(expense.categoryId);
+                  final row = rows[index];
+                  if (row is _DayHeader) {
+                    return Padding(
+                      padding: EdgeInsets.only(top: index == 0 ? 4 : 18, bottom: 10),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Semantics(
+                              header: true,
+                              child: Text(
+                                Formatters.relativeDay(row.date),
+                                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.textDark),
+                              ),
+                            ),
+                          ),
+                          Text(
+                            Formatters.rupiah(row.total),
+                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.textGrey),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  final expense = row as ExpenseModel;
                   return Padding(
                     padding: EdgeInsets.only(bottom: 14),
                     child: _TransactionCard(
+                      key: ValueKey(expense.id),
                       expense: expense,
-                      category: category,
+                      category: _categoryFor(expense.categoryId),
                       onDelete: () => _deleteExpense(expense),
                       onEdit: () => _edit(expense),
                       onRetry: () => _retryUpload(expense),
@@ -234,30 +280,74 @@ class TransaksiScreenState extends State<TransaksiScreen> {
   }
 }
 
+class _DayHeader {
+  final DateTime date;
+  final double total;
+  const _DayHeader(this.date, this.total);
+}
+
+class _DateChip extends StatelessWidget {
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+  final VoidCallback onClear;
+
+  const _DateChip({required this.label, required this.active, required this.onTap, required this.onClear});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Semantics(
+        button: true,
+        label: active ? 'Filter tanggal $label, ketuk untuk ubah' : 'Filter tanggal',
+        child: InputChip(
+          avatar: Icon(Icons.calendar_month_rounded, size: 18, color: active ? Colors.white : AppColors.textDark),
+          label: Text(label),
+          onPressed: onTap,
+          onDeleted: active ? onClear : null,
+          deleteIconColor: Colors.white,
+          deleteButtonTooltipMessage: 'Hapus filter tanggal',
+          backgroundColor: active ? AppColors.ink : AppColors.surface,
+          labelStyle: TextStyle(
+            color: active ? Colors.white : AppColors.textDark,
+            fontWeight: FontWeight.w700,
+            fontSize: 13,
+          ),
+          side: BorderSide(color: AppColors.ink, width: active ? 1.5 : 1),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          materialTapTargetSize: MaterialTapTargetSize.padded,
+        ),
+      ),
+    );
+  }
+}
+
 class _FilterChip extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  final Color color;
 
-  const _FilterChip({required this.label, required this.selected, required this.onTap, required this.color});
+  const _FilterChip({required this.label, required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return ChoiceChip(
-      label: Text(label),
-      selected: selected,
-      onSelected: (_) => onTap(),
-      selectedColor: AppColors.ink,
-      labelStyle: TextStyle(
-        color: selected ? Colors.white : AppColors.textDark,
-        fontWeight: FontWeight.w700,
-        fontSize: 13,
+    return Center(
+      child: ChoiceChip(
+        label: Text(label),
+        selected: selected,
+        onSelected: (_) => onTap(),
+        selectedColor: AppColors.ink,
+        labelStyle: TextStyle(
+          color: selected ? Colors.white : AppColors.textDark,
+          fontWeight: FontWeight.w700,
+          fontSize: 13,
+        ),
+        backgroundColor: AppColors.surface,
+        side: BorderSide(color: AppColors.ink, width: selected ? 1.5 : 1),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        showCheckmark: false,
+        materialTapTargetSize: MaterialTapTargetSize.padded,
       ),
-      backgroundColor: AppColors.surface,
-      side: BorderSide(color: AppColors.ink, width: selected ? 1.5 : 1),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      showCheckmark: false,
     );
   }
 }
@@ -270,6 +360,7 @@ class _TransactionCard extends StatelessWidget {
   final VoidCallback onRetry;
 
   const _TransactionCard({
+    super.key,
     required this.expense,
     required this.category,
     required this.onDelete,
@@ -289,13 +380,13 @@ class _TransactionCard extends StatelessWidget {
   (String, Color, IconData) _uploadInfo() {
     switch (expense.uploadStatus) {
       case UploadStatus.uploaded:
-        return ('Tersimpan di Drive', Color(0xFF2E7D32), Icons.cloud_done_rounded);
+        return ('Tersimpan di Drive', AppColors.isDark ? Color(0xFF81C995) : Color(0xFF2E7D32), Icons.cloud_done_rounded);
       case UploadStatus.uploading:
-        return ('Mengunggah…', Color(0xFF1565C0), Icons.cloud_upload_rounded);
+        return ('Mengunggah…', AppColors.isDark ? Color(0xFF90CAF9) : Color(0xFF1565C0), Icons.cloud_upload_rounded);
       case UploadStatus.failed:
-        return ('Upload gagal', Color(0xFFC62828), Icons.cloud_off_rounded);
+        return ('Upload gagal', AppColors.isDark ? Color(0xFFEF9A9A) : Color(0xFFC62828), Icons.cloud_off_rounded);
       case UploadStatus.needsAuth:
-        return ('Hubungkan Drive', Color(0xFFEF6C00), Icons.link_off_rounded);
+        return ('Hubungkan Drive', AppColors.isDark ? Color(0xFFFFB74D) : Color(0xFFB45309), Icons.link_off_rounded);
       default:
         return ('Menunggu upload', AppColors.textGrey, Icons.cloud_queue_rounded);
     }
@@ -303,8 +394,14 @@ class _TransactionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
+    final catColor = category?.color ?? Theme.of(context).colorScheme.primary;
+    final title = expense.description.isEmpty ? 'Pengeluaran' : expense.description;
+    final (statusLabel, statusColor, statusIcon) = _uploadInfo();
+    final canRetry = expense.uploadStatus == UploadStatus.failed ||
+        expense.uploadStatus == UploadStatus.needsAuth;
+
     return Container(
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(22),
@@ -313,57 +410,56 @@ class _TransactionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+          // Foto di atas, rasio tetap agar kartu konsisten di semua lebar layar.
+          Semantics(
+            button: true,
+            label: 'Lihat foto bukti $title',
             child: GestureDetector(
               onTap: () => _showImage(context),
-              child: _image(height: 210, fit: BoxFit.cover),
+              child: AspectRatio(
+                aspectRatio: 16 / 10,
+                child: _image(height: double.infinity, fit: BoxFit.cover),
+              ),
             ),
           ),
           Padding(
-            padding: EdgeInsets.fromLTRB(16, 14, 12, 15),
+            padding: EdgeInsets.fromLTRB(14, 12, 4, 10),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(color: (category?.color ?? primary).withOpacity(0.45), borderRadius: BorderRadius.circular(13)),
-                  child: Icon(category?.icon ?? Icons.category_rounded, color: AppColors.textDark, size: 20),
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(color: catColor, borderRadius: BorderRadius.circular(12)),
+                  child: Icon(category?.icon ?? Icons.category_rounded, color: AppColors.onColor(catColor), size: 20),
                 ),
                 SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(expense.description.isEmpty ? 'Pengeluaran' : expense.description, style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.textDark, fontSize: 15)),
-                      SizedBox(height: 4),
-                      Text('${category?.name ?? 'Tanpa kategori'} · ${Formatters.date(expense.date)}', style: TextStyle(color: AppColors.textGrey, fontSize: 12)),
-                      SizedBox(height: 6),
-                      Text(Formatters.currency(expense.amount), style: TextStyle(color: primary, fontWeight: FontWeight.w800, fontSize: 17)),
-                      SizedBox(height: 8),
-                      Builder(builder: (_) {
-                        final (label, color, icon) = _uploadInfo();
-                        final canRetry = expense.uploadStatus == UploadStatus.failed ||
-                            expense.uploadStatus == UploadStatus.needsAuth;
-                        return Wrap(
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          spacing: 6,
-                          children: [
-                            Icon(icon, size: 16, color: color),
-                            Text(label, style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w700)),
-                            if (canRetry)
-                              InkWell(
-                                onTap: onRetry,
-                                child: Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 4, horizontal: 4),
-                                  child: Text('Coba lagi', style: TextStyle(fontSize: 12, color: primary, fontWeight: FontWeight.w800)),
-                                ),
-                              ),
-                          ],
-                        );
-                      }),
+                      Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.textDark, fontSize: 15),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        '${category?.name ?? 'Tanpa kategori'} · ${Formatters.date(expense.date)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: AppColors.textGrey, fontSize: 12),
+                      ),
                     ],
+                  ),
+                ),
+                SizedBox(width: 8),
+                Padding(
+                  padding: EdgeInsets.only(top: 2),
+                  child: Text(
+                    Formatters.currency(expense.amount),
+                    style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.w800, fontSize: 16),
                   ),
                 ),
                 PopupMenuButton<String>(
@@ -378,6 +474,23 @@ class _TransactionCard extends StatelessWidget {
                     PopupMenuItem(value: 'delete', child: Text('Hapus')),
                   ],
                 ),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: AppColors.cardBorder),
+          Padding(
+            padding: EdgeInsets.fromLTRB(14, 2, 8, 2),
+            child: Row(
+              children: [
+                Icon(statusIcon, size: 18, color: statusColor),
+                SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    statusLabel,
+                    style: TextStyle(fontSize: 12, color: statusColor, fontWeight: FontWeight.w700),
+                  ),
+                ),
+                if (canRetry) TextButton(onPressed: onRetry, child: Text('Coba lagi')),
               ],
             ),
           ),
@@ -403,27 +516,47 @@ class _TransactionCard extends StatelessWidget {
 }
 
 class _EmptyTransactions extends StatelessWidget {
-  const _EmptyTransactions({super.key});
+  final bool filtered;
+  final VoidCallback onReset;
+  const _EmptyTransactions({required this.filtered, required this.onReset});
 
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
     return Center(
       child: Padding(
-        padding: EdgeInsets.all(28),
+        padding: EdgeInsets.fromLTRB(28, 28, 28, 120),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
               width: 82,
               height: 82,
-              decoration: BoxDecoration(color: primary.withOpacity(0.18), shape: BoxShape.circle),
-              child: Icon(Icons.photo_library_outlined, color: primary, size: 38),
+              decoration: BoxDecoration(color: primary, shape: BoxShape.circle),
+              child: Icon(
+                filtered ? Icons.filter_alt_off_rounded : Icons.photo_library_outlined,
+                color: AppColors.onColor(primary),
+                size: 38,
+              ),
             ),
             SizedBox(height: 16),
-            Text('Belum ada foto transaksi', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+            Text(
+              filtered ? 'Tidak ada foto yang cocok' : 'Belum ada foto transaksi',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: AppColors.textDark),
+            ),
             SizedBox(height: 6),
-            Text('Upload foto bukti saat mencatat pengeluaran agar foto muncul di sini.', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textGrey, fontSize: 13)),
+            Text(
+              filtered
+                  ? 'Coba ganti kategori atau tanggal, atau tampilkan semua foto.'
+                  : 'Upload foto bukti saat mencatat pengeluaran agar foto muncul di sini.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.textGrey, fontSize: 14, height: 1.35),
+            ),
+            if (filtered) ...[
+              SizedBox(height: 16),
+              OutlinedButton(onPressed: onReset, child: Text('Tampilkan semua')),
+            ],
           ],
         ),
       ),

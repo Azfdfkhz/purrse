@@ -37,3 +37,7 @@ Lihat `docs/UPDATE_1_2_0_STATUS.md` untuk daftar yang sudah/belum dikerjakan dan
 
 ## Update 1.2.1 (UI)
 Lihat `docs/UPDATE_1_2_1_UI_STATUS.md`.
+
+
+## Update 1.3.0
+Lihat `docs/UPDATE_1_3_0_STATUS.md` (Supabase Auth + sinkronisasi, FCM, layout), `docs/SUPABASE_SETUP.md`, `docs/FCM_SETUP.md`.

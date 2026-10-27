@@ -4,6 +4,13 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// FCM: plugin google-services hanya diterapkan bila google-services.json berisi
+// konfigurasi Firebase asli ("project_info"). File OAuth biasa tidak akan merusak build.
+val googleServicesFile = file("google-services.json")
+if (googleServicesFile.exists() && googleServicesFile.readText().contains("\"project_info\"")) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "com.example.finance_app"
     compileSdk = flutter.compileSdkVersion

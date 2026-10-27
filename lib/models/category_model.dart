@@ -6,19 +6,47 @@ class CategoryModel {
   final Color color;
   final IconData icon;
 
+  /// Untuk sinkronisasi: waktu terakhir diubah (UTC) dan tombstone hapus.
+  /// Null pada data lama; diperlakukan sebagai "sangat lama".
+  final DateTime? updatedAt;
+  final DateTime? deletedAt;
+
   const CategoryModel({
     required this.id,
     required this.name,
     required this.color,
     required this.icon,
+    this.updatedAt,
+    this.deletedAt,
   });
+
+  bool get isDeleted => deletedAt != null;
+
+  CategoryModel copyWith({
+    String? name,
+    Color? color,
+    IconData? icon,
+    DateTime? updatedAt,
+    DateTime? deletedAt,
+    bool clearDeletedAt = false,
+  }) =>
+      CategoryModel(
+        id: id,
+        name: name ?? this.name,
+        color: color ?? this.color,
+        icon: icon ?? this.icon,
+        updatedAt: updatedAt ?? this.updatedAt,
+        deletedAt: clearDeletedAt ? null : (deletedAt ?? this.deletedAt),
+      );
 
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
-    'color': color.value,
+    'color': color.toARGB32(),
     'codePoint': icon.codePoint,
     'fontFamily': icon.fontFamily,
+    'updatedAt': updatedAt?.toIso8601String(),
+    'deletedAt': deletedAt?.toIso8601String(),
   };
 
   factory CategoryModel.fromJson(Map<String, dynamic> json) {
@@ -33,11 +61,16 @@ class CategoryModel {
       iconData = _iconFromName(json['icon'] as String?);
     }
 
+    DateTime? ts(dynamic v) =>
+        v == null ? null : DateTime.tryParse(v.toString())?.toUtc();
+
     return CategoryModel(
       id: json['id'] as String,
       name: json['name'] as String,
       color: Color(json['color'] as int),
       icon: iconData,
+      updatedAt: ts(json['updatedAt']),
+      deletedAt: ts(json['deletedAt']),
     );
   }
 

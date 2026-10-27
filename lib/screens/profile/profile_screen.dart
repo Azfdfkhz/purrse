@@ -2,18 +2,21 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../models/user_model.dart';
+import '../../services/auth_service.dart';
+import '../../services/auto_backup_service.dart';
+import '../../services/notification_service.dart';
 import '../../services/storage_service.dart';
+import '../../services/supabase_service.dart';
+import '../../services/sync_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/theme_controller.dart';
 import '../auth/auth_choice_screen.dart';
+import '../settings/backup_restore_page.dart';
 import 'appearance_screen.dart';
 import 'category_management_screen.dart';
 import 'change_password_screen.dart';
-import 'notification_settings_screen.dart';
-import '../../services/notification_service.dart';
-import '../../services/auto_backup_service.dart';
 import 'edit_profile_screen.dart';
-import '../settings/backup_restore_page.dart';
+import 'notification_settings_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -24,6 +27,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   UserModel? _user;
+  bool _linked = false;
 
   @override
   void initState() {
@@ -33,8 +37,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _load() async {
     final user = await StorageService.instance.getCurrentUser();
+    final linked = user == null ? false : await AuthService.instance.isCloudLinked(user.id);
     if (!mounted) return;
-    setState(() => _user = user);
+    setState(() {
+      _user = user;
+      _linked = linked;
+    });
   }
 
   Future<void> _quickChangePhoto() async {
@@ -56,170 +64,116 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (changed == true) _load();
   }
 
+  Future<void> _push(Widget page) async {
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
+    _load();
+  }
+
   Future<void> _logout() async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text('Keluar dari akun?', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: Text('Kamu perlu masuk kembali untuk mengakses data pengeluaranmu.'),
+        title: Text('Keluar dari akun?'),
+        content: Text(_linked
+            ? 'Datamu tetap aman di cloud. Masuk kembali untuk melanjutkan di perangkat ini.'
+            : 'Kamu perlu masuk kembali untuk mengakses data pengeluaranmu.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: Text('Batal')),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text('Keluar', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            child: Text('Keluar', style: TextStyle(color: AppColors.isDark ? Color(0xFFFF8A80) : AppColors.danger, fontWeight: FontWeight.w800)),
           ),
         ],
       ),
     );
     if (confirm != true) return;
+    // Kirim perubahan terakhir sebelum sesi cloud diakhiri.
+    if (_linked) await SyncService.instance.syncNow();
     await NotificationService.instance.cancelAll();
     AutoBackupService.instance.cancel();
     await StorageService.instance.logout();
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => AuthChoiceScreen()),
-          (route) => false,
+      (route) => false,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     if (_user == null) {
-      return Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary));
+      return Center(child: CircularProgressIndicator());
     }
+    final user = _user!;
 
     return AnimatedBuilder(
       animation: ThemeController.instance,
       builder: (context, _) {
-        final themeColor = ThemeController.instance.accentColor;
+        final accent = ThemeController.instance.accentColor;
+        final iconBg = accent;
+        final iconFg = AppColors.onColor(accent);
 
         return SingleChildScrollView(
-          padding: EdgeInsets.only(bottom: 24),
-          child: Column(
-            children: [
-              _Header(
-                user: _user!,
-                themeColor: themeColor,
-                onCameraTap: _quickChangePhoto,
-              ),
-              SizedBox(height: 14),
-              Text(
-                _user!.username,
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 24, color: AppColors.textDark),
-              ),
-              SizedBox(height: 4),
-              Text(
-                '@${_usernameHandle(_user!.username)}',
-                style: TextStyle(color: AppColors.textGrey, fontSize: 14, fontWeight: FontWeight.w600),
-              ),
-              SizedBox(height: 16),
-              OutlinedButton.icon(
-                onPressed: _goEditProfile,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.textDark,
-                  side: BorderSide(color: themeColor, width: 1.5),
-                  padding: EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                ),
-                icon: Icon(Icons.edit_note_rounded, size: 20, color: themeColor),
-                label: Text('Edit Profile', style: TextStyle(fontWeight: FontWeight.w700)),
-              ),
-              SizedBox(height: 28),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  children: [
-                    _SectionLabel('Preferensi'),
-                    _MenuTile(
-                      icon: Icons.palette_rounded,
-                      iconBg: themeColor.withOpacity(0.2),
-                      iconColor: AppColors.textDark,
-                      title: 'Tampilan',
-                      subtitle: 'Atur warna dan tampilan aplikasi',
-                      onTap: () async {
-                        await Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => AppearanceScreen()),
-                        );
-                        _load();
-                      },
+          padding: EdgeInsets.fromLTRB(20, 8, 20, 120),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: 560),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(4, 8, 4, 16),
+                    child: Semantics(
+                      header: true,
+                      child: Text('Akun', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 24, color: AppColors.textDark)),
                     ),
-                    SizedBox(height: 12),
-                    _MenuTile(
-                      icon: Icons.notifications_active_rounded,
-                      iconBg: themeColor.withOpacity(0.2),
-                      iconColor: AppColors.textDark,
-                      title: 'Notifikasi',
-                      subtitle: 'Atur pengingat catat, tinjau, dan backup',
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => NotificationSettingsScreen()),
+                  ),
+                  _AccountCard(
+                    user: user,
+                    accent: accent,
+                    linked: _linked,
+                    onPhotoTap: _quickChangePhoto,
+                    onEdit: _goEditProfile,
+                  ),
+                  SizedBox(height: 24),
+                  _SectionLabel('Preferensi'),
+                  _MenuGroup(children: [
+                    _MenuRow(icon: Icons.palette_rounded, iconBg: iconBg, iconFg: iconFg, title: 'Tampilan', subtitle: 'Warna dan mode terang/gelap', onTap: () => _push(AppearanceScreen())),
+                    _MenuRow(icon: Icons.notifications_active_rounded, iconBg: iconBg, iconFg: iconFg, title: 'Notifikasi', subtitle: 'Pengingat catat, tinjau, dan backup', onTap: () => _push(NotificationSettingsScreen())),
+                    _MenuRow(icon: Icons.bookmark_rounded, iconBg: iconBg, iconFg: iconFg, title: 'Kategori pengeluaran', subtitle: 'Tambah, ubah, atau hapus kategori', onTap: () => _push(CategoryManagementScreen())),
+                  ]),
+                  SizedBox(height: 24),
+                  _SectionLabel('Data'),
+                  _MenuGroup(children: [
+                    _SyncRow(iconBg: iconBg, iconFg: iconFg, linked: _linked),
+                    _MenuRow(icon: Icons.cloud_sync_rounded, iconBg: iconBg, iconFg: iconFg, title: 'Backup & Restore', subtitle: 'Simpan dan pulihkan lewat Google Drive', onTap: () => _push(BackupRestorePage())),
+                  ]),
+                  SizedBox(height: 24),
+                  _SectionLabel('Keamanan'),
+                  _MenuGroup(children: [
+                    _MenuRow(icon: Icons.lock_rounded, iconBg: iconBg, iconFg: iconFg, title: 'Ubah password', subtitle: _linked ? 'Berlaku di semua perangkat' : 'Ubah password akun', onTap: () => _push(ChangePasswordScreen())),
+                  ]),
+                  SizedBox(height: 28),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _logout,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.isDark ? Color(0xFFFF8A80) : AppColors.danger,
+                        side: BorderSide(color: AppColors.isDark ? Color(0xFFFF8A80) : AppColors.danger, width: 1.5),
+                        minimumSize: Size(48, 52),
                       ),
+                      icon: Icon(Icons.logout_rounded),
+                      label: Text('Keluar', style: TextStyle(fontWeight: FontWeight.w800)),
                     ),
-                    SizedBox(height: 12),
-                    _MenuTile(
-                      icon: Icons.bookmark_rounded,
-                      iconBg: themeColor.withOpacity(0.2),
-                      iconColor: AppColors.textDark,
-                      title: 'Kategori Pengeluaran',
-                      subtitle: 'Kelola kategori pengeluaran',
-                      onTap: () async {
-                        await Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => CategoryManagementScreen()),
-                        );
-                        _load();
-                      },
-                    ),
-                    SizedBox(height: 22),
-                    _SectionLabel('Data & backup'),
-                    _MenuTile(
-                      icon: Icons.cloud_sync_rounded,
-                      iconBg: themeColor.withOpacity(0.2),
-                      iconColor: AppColors.textDark,
-                      title: 'Backup & Restore',
-                      subtitle: 'Simpan, lihat status, dan pulihkan data lewat Google Drive',
-                      onTap: () async {
-                        await Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => BackupRestorePage(),
-                          ),
-                        );
-                        _load();
-                      },
-                    ),
-                    SizedBox(height: 22),
-                    _SectionLabel('Keamanan'),
-                    _MenuTile(
-                      icon: Icons.lock_rounded,
-                      iconBg: Color(0xFFD9F3E7),
-                      iconColor: Color(0xFF2E7D32),
-                      title: 'Keamanan',
-                      subtitle: 'Ubah password akun',
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => ChangePasswordScreen()),
-                      ),
-                    ),
-                    SizedBox(height: 22),
-                    Divider(color: AppColors.cardBorder),
-                    SizedBox(height: 14),
-                    _MenuTile(
-                      icon: Icons.logout_rounded,
-                      iconBg: Color(0xFFFBDDD4),
-                      iconColor: Color(0xFFE0573F),
-                      title: 'Keluar',
-                      subtitle: 'Logout dari akun ini',
-                      onTap: _logout,
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         );
       },
     );
-  }
-
-  String _usernameHandle(String username) {
-    return username.toLowerCase().replaceAll(RegExp(r'\s+'), '');
   }
 }
 
@@ -229,213 +183,259 @@ class _SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Padding(
-        padding: EdgeInsets.only(left: 4, bottom: 10),
+    return Padding(
+      padding: EdgeInsets.only(left: 4, bottom: 8),
+      child: Semantics(
+        header: true,
         child: Text(
           text,
-          style: TextStyle(
-            fontWeight: FontWeight.w800,
-            fontSize: 13,
-            letterSpacing: 0.4,
-            color: AppColors.textGrey,
-          ),
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 0.4, color: AppColors.textGrey),
         ),
       ),
     );
   }
 }
 
-class _Header extends StatelessWidget {
+/// Kartu identitas: foto, nama, email, status cloud, dan tombol edit.
+class _AccountCard extends StatelessWidget {
   final UserModel user;
-  final Color themeColor;
-  final VoidCallback onCameraTap;
+  final Color accent;
+  final bool linked;
+  final VoidCallback onPhotoTap;
+  final VoidCallback onEdit;
 
-  const _Header({
+  const _AccountCard({
     required this.user,
-    required this.themeColor,
-    required this.onCameraTap,
+    required this.accent,
+    required this.linked,
+    required this.onPhotoTap,
+    required this.onEdit,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      alignment: Alignment.topCenter,
-      children: [
-        Container(
-          height: 230,
-          width: double.infinity,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                themeColor.withOpacity(0.85),
-                themeColor.withOpacity(0.35),
-              ],
-            ),
-            borderRadius: BorderRadius.vertical(bottom: Radius.circular(46)),
-          ),
-          child: Stack(
+    final hasAvatar = user.avatarPath != null && user.avatarPath!.isNotEmpty && File(user.avatarPath!).existsSync();
+    return Container(
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.ink, width: 1.5),
+      ),
+      child: Column(
+        children: [
+          Row(
             children: [
-              Positioned(
-                top: 40,
-                left: 24,
-                child: Icon(Icons.auto_awesome_rounded, size: 16, color: Colors.white.withOpacity(0.8)),
-              ),
-              Positioned(
-                top: 90,
-                right: 70,
-                child: Container(
-                  width: 6,
-                  height: 6,
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.8), shape: BoxShape.circle),
+              Semantics(
+                button: true,
+                label: 'Ganti foto profil',
+                child: GestureDetector(
+                  onTap: onPhotoTap,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      CircleAvatar(
+                        radius: 36,
+                        backgroundColor: accent,
+                        backgroundImage: hasAvatar ? FileImage(File(user.avatarPath!)) : null,
+                        child: hasAvatar ? null : Icon(Icons.person_rounded, size: 38, color: AppColors.onColor(accent)),
+                      ),
+                      Positioned(
+                        right: -2,
+                        bottom: -2,
+                        child: Container(
+                          padding: EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: AppColors.ink,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: AppColors.surface, width: 2),
+                          ),
+                          child: Icon(Icons.camera_alt_rounded, color: Colors.white, size: 14),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              Positioned(
-                top: 60,
-                right: 28,
-                child: Icon(Icons.favorite_rounded, size: 12, color: Colors.white.withOpacity(0.8)),
-              ),
-              Positioned(
-                top: 18,
-                right: 20,
-                child: Stack(
-                  clipBehavior: Clip.none,
+              SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.notifications_none_rounded, color: AppColors.textDark, size: 26),
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      child: Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(color: AppColors.textDark, shape: BoxShape.circle),
-                      ),
+                    Text(
+                      user.username,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20, color: AppColors.textDark),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      user.email,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: AppColors.textGrey, fontSize: 14),
+                    ),
+                    SizedBox(height: 8),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(linked ? Icons.cloud_done_rounded : Icons.phone_android_rounded, size: 16, color: AppColors.textGrey),
+                        SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            linked ? 'Terhubung ke cloud' : 'Hanya di perangkat ini',
+                            style: TextStyle(color: AppColors.textGrey, fontSize: 12, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
             ],
           ),
-        ),
-        Positioned(
-          top: 130,
-          child: GestureDetector(
-            onTap: onCameraTap,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  width: 128,
-                  height: 128,
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.12),
-                        blurRadius: 16,
-                        offset: Offset(0, 6),
-                      )
-                    ],
-                  ),
-                  padding: EdgeInsets.all(4),
-                  child: CircleAvatar(
-                    radius: 60,
-                    backgroundColor: themeColor.withOpacity(0.3),
-                    backgroundImage: (user.avatarPath != null && user.avatarPath!.isNotEmpty)
-                        ? FileImage(File(user.avatarPath!))
-                        : null,
-                    child: (user.avatarPath == null || user.avatarPath!.isEmpty)
-                        ? Icon(Icons.person, size: 54, color: AppColors.textDark)
-                        : null,
-                  ),
-                ),
-                Positioned(
-                  right: 0,
-                  bottom: 4,
-                  child: Container(
-                    padding: EdgeInsets.all(9),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 6),
-                      ],
-                    ),
-                    child: Icon(Icons.camera_alt_rounded, color: AppColors.textDark, size: 18),
-                  ),
-                ),
-              ],
+          SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onEdit,
+              icon: Icon(Icons.edit_rounded, size: 18),
+              label: Text('Edit profil', style: TextStyle(fontWeight: FontWeight.w800)),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
-class _MenuTile extends StatelessWidget {
+/// Beberapa baris menu dalam satu kartu, dipisah garis tipis.
+class _MenuGroup extends StatelessWidget {
+  final List<Widget> children;
+  const _MenuGroup({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    final items = <Widget>[];
+    for (var i = 0; i < children.length; i++) {
+      if (i > 0) items.add(Divider(height: 1, indent: 72, color: AppColors.cardBorder));
+      items.add(children[i]);
+    }
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: Material(color: Colors.transparent, child: Column(children: items)),
+    );
+  }
+}
+
+class _MenuRow extends StatelessWidget {
   final IconData icon;
   final Color iconBg;
-  final Color iconColor;
+  final Color iconFg;
   final String title;
   final String subtitle;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final Widget? trailing;
 
-  const _MenuTile({
+  const _MenuRow({
     required this.icon,
     required this.iconBg,
-    required this.iconColor,
+    required this.iconFg,
     required this.title,
     required this.subtitle,
-    required this.onTap,
+    this.onTap,
+    this.trailing,
   });
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.cardBorder),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle),
-              child: Icon(icon, color: iconColor, size: 22),
-            ),
-            SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.textDark),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: TextStyle(fontSize: 12, color: AppColors.textGrey, fontWeight: FontWeight.w500),
-                  ),
-                ],
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: 64),
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle),
+                child: Icon(icon, color: iconFg, size: 21),
               ),
-            ),
-            Icon(Icons.chevron_right_rounded, color: AppColors.textGrey),
-          ],
+              SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.textDark)),
+                    SizedBox(height: 2),
+                    Text(subtitle, style: TextStyle(fontSize: 12.5, color: AppColors.textGrey, height: 1.25)),
+                  ],
+                ),
+              ),
+              trailing ?? (onTap != null ? Icon(Icons.chevron_right_rounded, color: AppColors.textGrey) : SizedBox.shrink()),
+            ],
+          ),
         ),
       ),
+    );
+  }
+}
+
+/// Status sinkronisasi cloud + tombol "Sinkronkan sekarang".
+class _SyncRow extends StatelessWidget {
+  final Color iconBg;
+  final Color iconFg;
+  final bool linked;
+  const _SyncRow({required this.iconBg, required this.iconFg, required this.linked});
+
+  String _label(SyncService s) {
+    if (!linked || !SupabaseService.instance.isSignedIn) {
+      return 'Belum aktif. Masuk dengan akun cloud untuk menyinkronkan antar perangkat.';
+    }
+    switch (s.status) {
+      case SyncStatus.syncing:
+        return 'Menyinkronkan…';
+      case SyncStatus.offline:
+        return 'Offline. Akan dicoba lagi otomatis.';
+      case SyncStatus.error:
+        return 'Gagal menyinkronkan. Ketuk untuk coba lagi.';
+      case SyncStatus.notLinked:
+        return 'Akun belum terhubung ke cloud.';
+      case SyncStatus.idle:
+        final t = s.lastSyncedAt;
+        if (t == null) return 'Siap. Ketuk untuk sinkronkan sekarang.';
+        final hh = t.hour.toString().padLeft(2, '0');
+        final mm = t.minute.toString().padLeft(2, '0');
+        return 'Terakhir sinkron $hh:$mm. Ketuk untuk sinkronkan.';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: SyncService.instance,
+      builder: (context, _) {
+        final s = SyncService.instance;
+        final active = linked && SupabaseService.instance.isSignedIn;
+        return _MenuRow(
+          icon: Icons.sync_rounded,
+          iconBg: iconBg,
+          iconFg: iconFg,
+          title: 'Sinkronisasi cloud',
+          subtitle: _label(s),
+          onTap: active && s.status != SyncStatus.syncing ? () => s.syncNow() : null,
+          trailing: s.status == SyncStatus.syncing && active
+              ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.4))
+              : null,
+        );
+      },
     );
   }
 }

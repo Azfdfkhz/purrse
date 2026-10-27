@@ -38,6 +38,10 @@
         </receiver>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
+        <!-- FCM: kanal bawaan untuk notifikasi push (dibuat di NotificationService). -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="purssapp_push" />
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />

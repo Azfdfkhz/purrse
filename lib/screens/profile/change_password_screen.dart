@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../services/auth_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_text_field.dart';
@@ -35,8 +36,11 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       _error = null;
     });
     final user = await StorageService.instance.getCurrentUser();
-    if (user == null) return;
-    final err = await StorageService.instance.changePassword(
+    if (user == null) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+    final err = await AuthService.instance.changePassword(
       userId: user.id,
       oldPassword: _old.text,
       newPassword: _new.text,

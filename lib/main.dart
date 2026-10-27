@@ -4,7 +4,10 @@ import 'theme/theme_controller.dart';
 import 'screens/splash_screen.dart';
 import 'services/auto_backup_service.dart';
 import 'services/google_drive_service.dart';
+import 'services/fcm_service.dart';
 import 'services/notification_service.dart';
+import 'services/supabase_service.dart';
+import 'services/sync_service.dart';
 import 'services/storage_service.dart';
 import 'screens/settings/backup_restore_page.dart';
 
@@ -12,6 +15,9 @@ final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Sesi Supabase dipulihkan dari penyimpanan lokal (tidak butuh internet).
+  await SupabaseService.instance.initialize();
 
   await GoogleDriveService.instance.initialize();
   // Pulihkan sesi Drive secara senyap (tanpa memilih akun lagi).
@@ -23,10 +29,16 @@ Future<void> main() async {
   NotificationService.instance.onTap = _handleNotificationTap;
   NotificationService.instance.rescheduleAll();
 
+  // Push (FCM): aman bila Firebase belum dikonfigurasi (fitur nonaktif).
+  await FcmService.instance.init();
+  FcmService.instance.onOpen = _handleNotificationTap;
+
   runApp(FinanceApp());
 
   // Notifikasi mengetuk saat aplikasi tertutup: tunggu splash selesai, lalu buka layar tujuan.
-  NotificationService.instance.launchPayload().then((payload) async {
+  Future<String?> launch() async =>
+      await NotificationService.instance.launchPayload() ?? await FcmService.instance.launchPayload();
+  launch().then((payload) async {
     if (payload == null) return;
     await Future.delayed(Duration(milliseconds: 2600));
     await _handleNotificationTap(payload);
@@ -77,6 +89,11 @@ class _FinanceAppState extends State<FinanceApp> with WidgetsBindingObserver {
     ThemeController.instance.removeListener(_onThemeChanged);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) SyncService.instance.syncNow();
   }
 
   @override

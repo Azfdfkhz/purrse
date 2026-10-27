@@ -74,13 +74,13 @@ class NotificationService {
     try {
       tzdata.initializeTimeZones();
       try {
-        final name = await FlutterTimezone.getLocalTimezone();
-        tz.setLocalLocation(tz.getLocation(name));
+        final info = await FlutterTimezone.getLocalTimezone();
+        tz.setLocalLocation(tz.getLocation(info.identifier));
       } catch (_) {
         // Zona waktu tidak terbaca: pakai UTC bawaan paket timezone.
       }
-      android = AndroidInitializationSettings('@mipmap/ic_launcher');
-      ios = DarwinInitializationSettings(
+      final android = AndroidInitializationSettings('@mipmap/ic_launcher');
+      final ios = DarwinInitializationSettings(
         requestAlertPermission: false,
         requestBadgePermission: false,
         requestSoundPermission: false,
@@ -89,9 +89,47 @@ class NotificationService {
         InitializationSettings(android: android, iOS: ios),
         onDidReceiveNotificationResponse: (r) => onTap?.call(r.payload),
       );
+      // Kanal untuk notifikasi push (FCM). Id harus sama dengan meta-data
+      // default_notification_channel_id di AndroidManifest.
+      if (!kIsWeb && Platform.isAndroid) {
+        await _plugin
+            .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+            ?.createNotificationChannel(const AndroidNotificationChannel(
+              pushChannelId,
+              'Info PurssApp',
+              description: 'Pemberitahuan dari PurssApp',
+              importance: Importance.defaultImportance,
+            ));
+      }
       _ready = true;
     } catch (e) {
       debugPrint('Notifikasi gagal diinisialisasi: $e');
+    }
+  }
+
+  static const pushChannelId = 'purssapp_push';
+
+  /// Tampilkan notifikasi sekarang (dipakai untuk pesan push saat aplikasi terbuka).
+  Future<void> showNow({required String title, required String body, String? payload}) async {
+    if (!_ready) return;
+    try {
+      await _plugin.show(
+        DateTime.now().millisecondsSinceEpoch ~/ 1000 % 100000 + 2000,
+        title,
+        body,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            pushChannelId,
+            'Info PurssApp',
+            importance: Importance.defaultImportance,
+            priority: Priority.defaultPriority,
+          ),
+          iOS: DarwinNotificationDetails(),
+        ),
+        payload: payload,
+      );
+    } catch (e) {
+      debugPrint('Gagal menampilkan notifikasi: $e');
     }
   }
 
