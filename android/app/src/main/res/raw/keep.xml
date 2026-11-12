@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Jaga resource yang hanya dirujuk lewat nama (ikon notifikasi) dari penyusutan resource saat rilis. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_stat_purrse,@drawable/ic_notif_large,@mipmap/ic_launcher_foreground,@mipmap/ic_launcher_monochrome" />

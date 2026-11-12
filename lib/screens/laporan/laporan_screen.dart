@@ -9,6 +9,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/theme_controller.dart';
 import '../../utils/formatters.dart';
 import '../../widgets/ui_kit.dart';
+import '../../widgets/expense_actions.dart';
 
 enum _ReportMode { harian, bulanan }
 
@@ -879,7 +880,9 @@ class _ExpenseCard extends StatelessWidget {
     final color = category?.color ?? AppColors.softCoral;
     final hasProof = expense.hasProof || expense.driveFileId != null;
 
-    return InkCard(
+    return Pressable(
+      onTap: () => showExpenseActions(context, expense),
+      child: InkCard(
       radius: 24,
       padding: EdgeInsets.all(14),
       child: Column(
@@ -944,7 +947,7 @@ class _ExpenseCard extends StatelessWidget {
           ],
         ],
       ),
-    );
+    ));
   }
 }
 

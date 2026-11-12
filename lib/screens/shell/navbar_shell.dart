@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/theme_controller.dart';
 import '../../widgets/ui_kit.dart';
+import '../../widgets/purrse_logo.dart';
 import '../../widgets/tour_guide.dart';
 import '../../widgets/tour_keys.dart';
 import '../home/beranda_screen.dart';
@@ -36,6 +37,7 @@ class _NavbarShellState extends State<NavbarShell> {
     _startUploads();
     SyncService.instance.start();
     SyncService.instance.addListener(_onSyncChanged);
+    StorageService.expensesVersion.addListener(_reloadAll);
     AuthService.instance.afterLogin();
     WidgetsBinding.instance.addPostFrameCallback((_) => _showFirstRunGuide());
   }
@@ -50,6 +52,13 @@ class _NavbarShellState extends State<NavbarShell> {
     await prefs.setBool(_tourKey, true);
   }
 
+
+  /// Pengeluaran diedit/dihapus dari tab mana pun: segarkan semua tab.
+  void _reloadAll() {
+    _berandaKey.currentState?.reload();
+    _transaksiKey.currentState?.reload();
+    _laporanKey.currentState?.reload();
+  }
 
   /// Data baru dari cloud: muat ulang layar yang menampilkan data.
   void _onSyncChanged() {
@@ -68,6 +77,7 @@ class _NavbarShellState extends State<NavbarShell> {
 
   @override
   void dispose() {
+    StorageService.expensesVersion.removeListener(_reloadAll);
     _pageCtrl.dispose();
     SyncService.instance.removeListener(_onSyncChanged);
     ProofUploadService.instance.stop();
@@ -113,11 +123,7 @@ class _NavbarShellState extends State<NavbarShell> {
       _berandaKey.currentState?.reload();
       _transaksiKey.currentState?.reload();
       _laporanKey.currentState?.reload();
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(SnackBar(content: Text('Pengeluaran tersimpan ✓')));
-      }
+      if (mounted) showPurrseSnack(context, 'Pengeluaran tercatat 🐾');
     }
   }
 
@@ -325,7 +331,15 @@ class _NavItem extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: 22, color: fg),
+                // Ikon "pop" membal setiap kali tab dipilih.
+                TweenAnimationBuilder<double>(
+                  key: ValueKey(selected),
+                  tween: Tween<double>(begin: selected ? 0.6 : 1.0, end: 1.0),
+                  duration: motion(context, selected ? 520 : 1),
+                  curve: Curves.elasticOut,
+                  builder: (_, v, child) => Transform.scale(scale: v, child: child),
+                  child: Icon(icon, size: 22, color: fg),
+                ),
                 if (selected) ...[
                   SizedBox(width: 6),
                   Flexible(

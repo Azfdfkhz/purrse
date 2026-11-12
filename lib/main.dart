@@ -26,6 +26,9 @@ Future<void> main() async {
   await NotificationService.instance.init();
   NotificationService.instance.onTap = _handleNotificationTap;
   NotificationService.instance.rescheduleAll();
+  // Pengingat harian ikut menyesuaikan tiap ada pengeluaran baru/diubah/dihapus.
+  StorageService.onExpensesChanged =
+      () => NotificationService.instance.refreshDailyReminder();
 
   // Push (FCM): aman bila Firebase belum dikonfigurasi (fitur nonaktif).
   await FcmService.instance.init();
@@ -91,7 +94,10 @@ class _FinanceAppState extends State<FinanceApp> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) SyncService.instance.syncNow();
+    if (state == AppLifecycleState.resumed) {
+      SyncService.instance.syncNow();
+      NotificationService.instance.refreshDailyReminder();
+    }
   }
 
   @override
@@ -112,7 +118,7 @@ class _FinanceAppState extends State<FinanceApp> with WidgetsBindingObserver {
       builder: (context, _) {
         ThemeController.instance.syncPalette();
         return MaterialApp(
-          title: 'PurssApp',
+          title: 'Purrse',
           debugShowCheckedModeBanner: false,
           navigatorKey: appNavigatorKey,
           theme: AppTheme.build(accent: ThemeController.instance.accentColor),

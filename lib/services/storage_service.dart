@@ -270,6 +270,20 @@ class StorageService {
       });
 
   // ---------- Expenses ----------
+  /// Dipanggil setiap data pengeluaran berubah (tambah/ubah/hapus/restore).
+  /// Diisi dari main.dart untuk menyegarkan pengingat harian.
+  static void Function()? onExpensesChanged;
+
+  /// Naik setiap data pengeluaran berubah; layar yang menampilkan data memuat ulang.
+  static final ValueNotifier<int> expensesVersion = ValueNotifier<int>(0);
+
+  void _notifyExpensesChanged() {
+    expensesVersion.value++;
+    try {
+      onExpensesChanged?.call();
+    } catch (_) {}
+  }
+
   Future<List<ExpenseModel>> _loadAllExpenses(String userId) async {
     final prefs = await _prefs;
     final raw = prefs.getString('$_kExpensesPrefix$userId');
@@ -314,6 +328,7 @@ class StorageService {
         await _saveAllExpenses(expense.userId, all);
         AutoBackupService.instance.markDirty();
         SyncService.instance.markDirty();
+        _notifyExpensesChanged();
       });
 
   /// Ubah satu transaksi. [change] menerima data terbaru dan
@@ -345,6 +360,7 @@ class StorageService {
       ),
     );
     AutoBackupService.instance.markDirty();
+    _notifyExpensesChanged();
   }
 
   /// Hapus lunak (tombstone) agar penghapusan dapat disinkronkan.
@@ -359,6 +375,7 @@ class StorageService {
       ),
     );
     AutoBackupService.instance.markDirty();
+    _notifyExpensesChanged();
   }
 
   /// Transaksi yang foto buktinya belum terunggah.

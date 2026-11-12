@@ -70,7 +70,7 @@ class FcmService {
     final n = m.notification;
     if (n == null) return;
     NotificationService.instance.showNow(
-      title: n.title ?? 'PurssApp',
+      title: n.title ?? 'Purrse',
       body: n.body ?? '',
       payload: _payloadOf(m),
     );

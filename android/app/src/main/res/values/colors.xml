@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Palet identitas Purrse -->
+    <color name="purrse_primary">#6A4FCF</color>
+    <color name="purrse_accent">#F79B4B</color>
+    <color name="purrse_secondary">#EADFFF</color>
+    <color name="purrse_background">#FFF8F0</color>
+    <color name="purrse_text">#2E1F3A</color>
+    <color name="purrse_splash_bg">#FFF8F0</color>
+</resources>

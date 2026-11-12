@@ -16,7 +16,7 @@ class ComingSoon extends StatelessWidget {
           Container(
             width: 90,
             height: 90,
-            decoration: BoxDecoration(color: AppColors.softPurple, shape: BoxShape.circle),
+            decoration: BoxDecoration(color: AppColors.soft, shape: BoxShape.circle),
             child: Icon(icon, size: 36, color: Theme.of(context).colorScheme.primary),
           ),
           SizedBox(height: 16),

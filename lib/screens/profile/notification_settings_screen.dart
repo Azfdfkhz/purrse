@@ -79,6 +79,18 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
     setState(() => _prefs[k] = next);
   }
 
+  Future<void> _preview() async {
+    final ok = await _svc.showPreview();
+    if (!mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Izin notifikasi belum aktif. Aktifkan lewat pengaturan sistem ya.'),
+      ));
+    } else {
+      setState(() => _permission = true);
+    }
+  }
+
   String _fmt(ReminderPref p) =>
       '${p.hour.toString().padLeft(2, '0')}.${p.minute.toString().padLeft(2, '0')}';
 
@@ -136,6 +148,12 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                   ),
                   SizedBox(height: 12),
                 ],
+                SizedBox(height: 4),
+                OutlinedButton.icon(
+                  onPressed: _preview,
+                  icon: Icon(Icons.pets_rounded, size: 18),
+                  label: Text('Coba notifikasi lucu'),
+                ),
               ],
             ),
     );

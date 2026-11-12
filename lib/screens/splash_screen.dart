@@ -3,6 +3,7 @@ import '../models/user_model.dart';
 import '../services/storage_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_controller.dart';
+import '../widgets/purrse_logo.dart';
 import 'auth/auth_choice_screen.dart';
 import 'shell/navbar_shell.dart';
 
@@ -21,7 +22,8 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _bootstrap() async {
-    await Future.delayed(Duration(milliseconds: 1400));
+    // Beri waktu animasi masuk logo (kucing memantul + tulisan meluncur).
+    await Future.delayed(Duration(milliseconds: 2100));
     await ThemeController.instance.load();
     UserModel? user;
     try {
@@ -44,33 +46,15 @@ class _SplashScreenState extends State<SplashScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Center(
-        child: TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0.85, end: 1),
-          duration: MediaQuery.of(context).disableAnimations
-              ? Duration.zero
-              : Duration(milliseconds: 700),
-          curve: Curves.easeOutBack,
-          builder: (_, t, child) => Opacity(
-            opacity: t.clamp(0.0, 1.0),
-            child: Transform.scale(scale: t, child: child),
-          ),
-          child: Container(
-          width: 140,
-          height: 140,
-          decoration: BoxDecoration(
-            color: ThemeController.instance.accentColor,
-            shape: BoxShape.circle,
-          ),
-          alignment: Alignment.center,
-          child: Image.asset(
-            'assets/images/favicon.png',
-            width: 200,
-            height: 200,
-            fit: BoxFit.contain,
-          ),
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            PurrseLogo(markSize: 96, axis: Axis.vertical),
+            SizedBox(height: 28),
+            PurrseDots(size: 9),
+          ],
         ),
-        ),
+      ),
     );
   }
 }

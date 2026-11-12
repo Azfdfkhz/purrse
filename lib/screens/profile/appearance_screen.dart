@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/theme_controller.dart';
+import '../../widgets/ui_kit.dart';
 
 class AppearanceScreen extends StatefulWidget {
   const AppearanceScreen({super.key});
@@ -10,7 +11,7 @@ class AppearanceScreen extends StatefulWidget {
 }
 
 class _AppearanceScreenState extends State<AppearanceScreen> {
-  late Color _selected = ThemeController.instance.accentColor;
+  late Color _selected = ThemeController.instance.seedColor;
 
   Future<void> _apply(Color color) async {
     setState(() => _selected = color);
@@ -50,14 +51,32 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
               },
             ),
             SizedBox(height: 22),
-            Text('Warna aksen',
+            Text('Warna tema',
                 style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.textDark)),
             SizedBox(height: 8),
             Text(
-              'Pilih warna utama aplikasi. Warna ini akan menyesuaikan tombol, navbar, kartu utama, indikator, dan elemen UI lainnya.',
+              'Semua warna aplikasi (tombol, navbar, kartu, latar, dan garis) mengikuti warna yang kamu pilih. Warna bawaan Purrse adalah ungu; warna lain seperti Burgundy hanya dipakai kalau kamu memilihnya.',
               style: TextStyle(color: AppColors.textGrey),
             ),
-            SizedBox(height: 20),
+            SizedBox(height: 14),
+            InkCard(
+              bold: false,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: InkButton(label: 'Contoh tombol', onPressed: () {}, expand: true),
+                  ),
+                  SizedBox(width: 12),
+                  Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(color: AppColors.soft, shape: BoxShape.circle),
+                    child: Icon(Icons.pets_rounded, color: AppColors.onColor(AppColors.soft)),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: 18),
             Expanded(
               child: GridView.builder(
                 itemCount: ThemeController.presets.length,
@@ -87,7 +106,7 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
                           ),
                           alignment: Alignment.center,
                           child: isSelected
-                              ? Icon(Icons.check_rounded, color: AppColors.onPastel)
+                              ? Icon(Icons.check_rounded, color: AppColors.onColor(option.color))
                               : null,
                         ),
                         SizedBox(height: 8),

@@ -7,6 +7,7 @@ import '../../widgets/ui_kit.dart';
 import '../shell/navbar_shell.dart';
 import 'register_screen.dart';
 import 'login_screen.dart';
+import '../../widgets/purrse_logo.dart';
 
 class AuthChoiceScreen extends StatefulWidget {
   const AuthChoiceScreen({super.key});
@@ -60,13 +61,7 @@ class _AuthChoiceScreenState extends State<AuthChoiceScreen> {
                       width: double.infinity,
                       alignment: Alignment.center,
                       padding: const EdgeInsets.all(16),
-                      child: Image.asset(
-                        'assets/images/Kucingkucing.png',
-                        semanticLabel: 'Ilustrasi kucing PurssApp',
-                        width: 200,
-                        height: 200,
-                        fit: BoxFit.contain,
-                      ),
+                      child: const PurrseLogo(markSize: 128, axis: Axis.vertical),
                     ),
                     Align(
                       alignment: Alignment.centerLeft,

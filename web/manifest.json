@@ -1,11 +1,11 @@
 {
-    "name": "finance_app",
-    "short_name": "finance_app",
+    "name": "Purrse",
+    "short_name": "Purrse",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#FFF8F0",
+    "theme_color": "#6A4FCF",
+    "description": "Purrse - catat pengeluaran bareng kucing dompetmu.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

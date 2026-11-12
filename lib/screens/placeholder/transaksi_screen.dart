@@ -10,6 +10,7 @@ import '../../services/storage_service.dart';
 import '../expense/add_expense_modal.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/formatters.dart';
+import '../../widgets/purrse_logo.dart';
 
 class TransaksiScreen extends StatefulWidget {
   const TransaksiScreen({super.key});
@@ -523,23 +524,13 @@ class _EmptyTransactions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
     return Center(
       child: Padding(
         padding: EdgeInsets.fromLTRB(28, 28, 28, 120),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 82,
-              height: 82,
-              decoration: BoxDecoration(color: primary, shape: BoxShape.circle),
-              child: Icon(
-                filtered ? Icons.filter_alt_off_rounded : Icons.photo_library_outlined,
-                color: AppColors.onColor(primary),
-                size: 38,
-              ),
-            ),
+            PurrseMark(size: 92, semanticLabel: null),
             SizedBox(height: 16),
             Text(
               filtered ? 'Tidak ada foto yang cocok' : 'Belum ada foto transaksi',

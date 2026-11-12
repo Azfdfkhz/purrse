@@ -5,7 +5,8 @@ import '../theme/app_colors.dart';
 Duration motion(BuildContext context, [int ms = 200]) =>
     MediaQuery.of(context).disableAnimations ? Duration.zero : Duration(milliseconds: ms);
 
-/// Efek tekan halus (skala kecil) untuk elemen yang bisa diketuk.
+/// Efek tekan untuk elemen yang bisa diketuk: mengecil cepat saat ditekan,
+/// lalu membal halus (elastis) saat dilepas, seperti bantalan kucing.
 /// Tidak menunda aksi: onTap langsung dipanggil.
 class Pressable extends StatefulWidget {
   final Widget child;
@@ -16,7 +17,7 @@ class Pressable extends StatefulWidget {
     super.key,
     required this.child,
     this.onTap,
-    this.pressedScale = 0.96,
+    this.pressedScale = 0.95,
   });
 
   @override
@@ -40,15 +41,16 @@ class _PressableState extends State<Pressable> {
       onTap: widget.onTap,
       child: AnimatedScale(
         scale: _down ? widget.pressedScale : 1,
-        duration: motion(context, 120),
-        curve: Curves.easeOut,
+        duration: motion(context, _down ? 110 : 380),
+        curve: _down ? Curves.easeOut : Curves.elasticOut,
         child: widget.child,
       ),
     );
   }
 }
 
-/// Muncul dengan fade + geser kecil. [index] memberi jeda bertahap antar item.
+/// Muncul dengan fade + geser kecil yang sedikit membal. [index] memberi jeda
+/// bertahap antar item.
 class FadeSlideIn extends StatelessWidget {
   final Widget child;
   final int index;
@@ -62,10 +64,10 @@ class FadeSlideIn extends StatelessWidget {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
       duration: d,
-      curve: Curves.easeOutCubic,
+      curve: Curves.easeOutBack,
       builder: (_, t, c) => Opacity(
-        opacity: t,
-        child: Transform.translate(offset: Offset(0, (1 - t) * 14), child: c),
+        opacity: t.clamp(0.0, 1.0),
+        child: Transform.translate(offset: Offset(0, (1 - t) * 16), child: c),
       ),
       child: child,
     );

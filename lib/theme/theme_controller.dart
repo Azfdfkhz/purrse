@@ -5,17 +5,22 @@ import 'app_colors.dart';
 
 enum AppThemeMode { system, light, dark }
 
-/// Mengatur warna aksen dan mode tema (Sistem/Terang/Gelap). Keduanya
-/// disimpan lokal. [AppColors.isDark] selalu disinkronkan di sini sebelum
-/// listener (MaterialApp) membangun ulang tema.
+/// Mengatur warna pilihan dan mode tema (Sistem/Terang/Gelap). Keduanya
+/// disimpan lokal. [AppColors.isDark] dan [AppColors.seed] selalu
+/// disinkronkan di sini sebelum listener (MaterialApp) membangun ulang tema.
 class ThemeController extends ChangeNotifier {
   ThemeController._();
   static final ThemeController instance = ThemeController._();
 
   static const _kMode = 'theme_mode';
 
-  Color accentColor = AppColors.softPurple;
+  /// Warna pilihan pengguna. Semua warna UI diturunkan dari sini.
+  Color seedColor = AppColors.brandPrimary;
   AppThemeMode mode = AppThemeMode.system;
+
+  /// Versi pastel dari warna pilihan (dipakai kartu hero, ikon, FAB).
+  /// Nama dipertahankan agar layar lama tetap valid.
+  Color get accentColor => AppColors.soft;
 
   bool get isDark => switch (mode) {
         AppThemeMode.dark => true,
@@ -24,8 +29,26 @@ class ThemeController extends ChangeNotifier {
           WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark,
       };
 
-  /// Sinkronkan flag palet dengan mode saat ini (tanpa notifikasi).
-  void syncPalette() => AppColors.isDark = isDark;
+  /// Sinkronkan flag palet dengan mode & warna saat ini (tanpa notifikasi).
+  void syncPalette() {
+    AppColors.isDark = isDark;
+    AppColors.seed = seedColor;
+  }
+
+  /// Warna pastel lama (sebelum identitas Purrse) -> padanannya sekarang.
+  /// Pengguna lama dan backup lama tetap mendapat warna dengan rona serupa.
+  static const Map<int, Color> _legacy = {
+    0xFFE3DEF6: AppColors.brandPrimary,
+    0xFFF6D9E6: Color(0xFFD9578A),
+    0xFFDCEBF8: Color(0xFF3B82C4),
+    0xFFDBF3EC: Color(0xFF2E9E85),
+    0xFFFBE6D4: Color(0xFFF79B4B),
+    0xFFFBF1D2: Color(0xFFD39B1E),
+    0xFFE7E4F0: Color(0xFF7C7694),
+    0xFFFAE1DE: Color(0xFFE06B5E),
+  };
+
+  static Color _migrate(Color c) => _legacy[c.value] ?? c;
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -35,7 +58,7 @@ class ThemeController extends ChangeNotifier {
       orElse: () => AppThemeMode.system,
     );
     final saved = await StorageService.instance.getAccentColor();
-    if (saved != null) accentColor = Color(saved);
+    seedColor = saved != null ? _migrate(Color(saved)) : AppColors.brandPrimary;
     syncPalette();
     notifyListeners();
   }
@@ -55,26 +78,32 @@ class ThemeController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Simpan warna pilihan. Nama [setAccent] dipertahankan (dipakai juga oleh
+  /// restore backup).
   Future<void> setAccent(Color color) async {
-    accentColor = color;
+    seedColor = _migrate(color);
+    syncPalette();
     notifyListeners();
-    await StorageService.instance.setAccentColor(color.value);
+    await StorageService.instance.setAccentColor(seedColor.value);
   }
 
-  static const List<_AccentOption> presets = [
-    _AccentOption('Ungu Lembut', AppColors.softPurple),
-    _AccentOption('Pink Lembut', Color(0xFFF6D9E6)),
-    _AccentOption('Biru Lembut', Color(0xFFDCEBF8)),
-    _AccentOption('Mint Lembut', Color(0xFFDBF3EC)),
-    _AccentOption('Peach Lembut', Color(0xFFFBE6D4)),
-    _AccentOption('Kuning Lembut', Color(0xFFFBF1D2)),
-    _AccentOption('Lavender Abu', Color(0xFFE7E4F0)),
-    _AccentOption('Coral Lembut', Color(0xFFFAE1DE)),
+  /// Pilihan warna. Warna pertama = bawaan Purrse. Burgundy hanya aktif bila
+  /// pengguna memilihnya sendiri.
+  static const List<AccentOption> presets = [
+    AccentOption('Ungu Purrse', AppColors.brandPrimary),
+    AccentOption('Burgundy', Color(0xFF98677F)),
+    AccentOption('Jingga Kucing', AppColors.brandAccent),
+    AccentOption('Pink Permen', Color(0xFFD9578A)),
+    AccentOption('Biru Langit', Color(0xFF3B82C4)),
+    AccentOption('Mint Segar', Color(0xFF2E9E85)),
+    AccentOption('Kuning Madu', Color(0xFFD39B1E)),
+    AccentOption('Coral', Color(0xFFE06B5E)),
+    AccentOption('Abu Lavender', Color(0xFF7C7694)),
   ];
 }
 
-class _AccentOption {
+class AccentOption {
   final String name;
   final Color color;
-  const _AccentOption(this.name, this.color);
+  const AccentOption(this.name, this.color);
 }

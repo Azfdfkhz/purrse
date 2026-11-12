@@ -10,6 +10,8 @@ import '../../theme/app_colors.dart';
 import '../../theme/theme_controller.dart';
 import '../../utils/formatters.dart';
 import '../../widgets/ui_kit.dart';
+import '../../widgets/purrse_logo.dart';
+import '../../widgets/expense_actions.dart';
 
 class BerandaScreen extends StatefulWidget {
   final VoidCallback? onNavigateToLaporan;
@@ -689,12 +691,11 @@ class _RecentCard extends StatelessWidget {
           SizedBox(height: 8),
           if (expenses.isEmpty)
             Padding(
-              padding: EdgeInsets.symmetric(vertical: 28),
+              padding: EdgeInsets.symmetric(vertical: 20),
               child: Center(
-                child: Text(
-                  'Belum ada pengeluaran bulan ini.\nKetuk tombol + untuk mencatat.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.textGrey, fontSize: 13, height: 1.5),
+                child: PurrseEmptyState(
+                  title: 'Dompetnya masih kosong',
+                  message: 'Belum ada pengeluaran bulan ini.\nKetuk tombol + untuk mencatat.',
                 ),
               ),
             )
@@ -715,7 +716,11 @@ class _ExpenseRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = category?.color ?? AppColors.softCoral;
-    return Padding(
+    // Ketuk: popup Edit / Hapus. Daftar dimuat ulang otomatis lewat
+    // StorageService.expensesVersion.
+    return Pressable(
+      onTap: () => showExpenseActions(context, expense),
+      child: Padding(
       padding: EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
@@ -753,6 +758,6 @@ class _ExpenseRow extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ));
   }
 }
