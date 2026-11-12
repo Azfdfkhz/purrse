@@ -43,3 +43,9 @@
 
 ## Perbaikan build
 - `purrse_motion.dart`: import `flutter/cupertino.dart` dikembalikan (`CupertinoPageTransitionsBuilder`).
+
+## Optimasi animasi (anti-lag)
+- Logo: gambar dibuat sekali, animasi hanya mengubah satu matriks transform; ada `RepaintBoundary`; aset logo diperkecil (900 KB total) dan di-decode sesuai ukuran tampil.
+- Animasi idle logo hanya beberapa siklus (bukan selamanya) agar hemat baterai dan tidak jalan di tab tersembunyi.
+- Transisi halaman disederhanakan jadi fade + geser (tanpa scale berlapis).
+- Pantulan tombol dipendekkan.

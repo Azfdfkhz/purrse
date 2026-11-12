@@ -37,24 +37,12 @@ class PurrsePageTransitionsBuilder extends PageTransitionsBuilder {
       curve: Curves.easeOutCubic,
       reverseCurve: Curves.easeInCubic,
     );
-    final cover = CurvedAnimation(
-      parent: secondaryAnimation,
-      curve: Curves.easeOutCubic,
-      reverseCurve: Curves.easeInCubic,
-    );
-
-    return ScaleTransition(
-      // Halaman di bawah mengecil sedikit saat halaman baru menutupinya.
-      scale: Tween<double>(begin: 1.0, end: 0.97).animate(cover),
-      child: FadeTransition(
-        opacity: enter,
-        child: SlideTransition(
-          position: Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero).animate(enter),
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.97, end: 1.0).animate(enter),
-            child: child,
-          ),
-        ),
+    // Hanya fade + geser: murah di GPU, stabil di perangkat menengah.
+    return FadeTransition(
+      opacity: enter,
+      child: SlideTransition(
+        position: Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero).animate(enter),
+        child: child,
       ),
     );
   }

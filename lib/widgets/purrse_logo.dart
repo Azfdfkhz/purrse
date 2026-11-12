@@ -68,7 +68,7 @@ class _PurrseMarkState extends State<PurrseMark> with TickerProviderStateMixin {
   bool _started = false;
 
   // Proporsi aset (mark = 1.0 lebar). Diukur dari berkas branding.
-  static const double _aspect = 1278 / 1238;
+  static const double _aspect = 578 / 560;
 
   @override
   void initState() {
@@ -95,7 +95,7 @@ class _PurrseMarkState extends State<PurrseMark> with TickerProviderStateMixin {
       } else {
         _intro.value = 1;
       }
-      if (mounted && widget.idle) _loop.repeat();
+      if (mounted && widget.idle) _loop.repeat(count: 4);
     }
 
     start();
@@ -113,132 +113,125 @@ class _PurrseMarkState extends State<PurrseMark> with TickerProviderStateMixin {
     if (!widget.tappable || _reduceMotion(context)) return;
     HapticFeedback.lightImpact();
     _tap.forward(from: 0);
+    if (widget.idle && !_loop.isAnimating) _loop.repeat(count: 2);
   }
+
+  Widget _img(String asset, double width, {double? height}) => Image.asset(
+        asset,
+        width: width,
+        height: height,
+        fit: BoxFit.contain,
+        // Decode sesuai ukuran tampil (hemat memori & raster ringan).
+        cacheWidth: (width * 3).round(),
+        filterQuality: FilterQuality.medium,
+        gaplessPlayback: true,
+      );
 
   @override
   Widget build(BuildContext context) {
     final w = widget.size;
     final h = w * _aspect;
 
+    // Gambar dibuat SEKALI; animasi hanya mengubah matriks transform.
+    final markImg = Semantics(
+      label: widget.semanticLabel,
+      image: true,
+      child: ExcludeSemantics(child: _img(PurrseAssets.mark, w, height: h)),
+    );
+    final sparkleImg = _img(PurrseAssets.sparkle, w * 0.207);
+    final dashA = _img(PurrseAssets.dashPurpleA, w * 0.114);
+    final dashB = _img(PurrseAssets.dashPurpleB, w * 0.141);
+
     final body = AnimatedBuilder(
       animation: Listenable.merge([_intro, _loop, _tap]),
-      builder: (context, _) {
+      child: markImg,
+      builder: (context, markChild) {
         final i = _intro.value;
         final l = _loop.value * 2 * math.pi;
         final t = _tap.value;
 
-        // --- Masuk: jatuh dari atas, memantul (elastic) + sedikit gepeng.
+        // Masuk: jatuh dari atas, memantul (elastic) + sedikit gepeng.
         final drop = Curves.elasticOut.transform(i.clamp(0.0, 1.0));
         double dy = (1 - drop) * -h * 0.55;
-        double scale = 0.55 + 0.45 * drop;
+        final baseScale = 0.55 + 0.45 * drop;
         double squashX = 1, squashY = 1;
         final land = (i > 0.0 && i < 0.5) ? math.sin(i / 0.5 * math.pi) : 0.0;
         squashX += 0.05 * land;
         squashY -= 0.05 * land;
 
-        // --- Idle: bernapas (gepeng-lonjong) + melayang + miring pelan.
+        // Idle: bernapas + melayang + miring pelan.
         final breathe = math.sin(l);
         squashY += 0.018 * breathe;
         squashX -= 0.010 * breathe;
-        dy += -h * 0.012 * math.sin(l + math.pi / 2);
+        dy += -h * 0.012 * math.cos(l);
         double rot = 0.022 * math.sin(l * 0.5);
 
-        // --- Ketuk: lompat, mendarat gepeng, lalu goyang meredam.
+        // Ketuk: lompat, mendarat gepeng, lalu goyang meredam.
         if (t > 0) {
           dy += -h * 0.16 * math.sin(math.pi * math.min(t / 0.55, 1.0)).abs();
           if (t > 0.5) {
             final k = (t - 0.5) / 0.5;
+            final sq = math.sin(math.min(k * 2, 1.0) * math.pi);
             rot += 0.16 * math.sin(k * 3 * math.pi) * (1 - k);
-            squashY -= 0.07 * math.sin(math.min(k * 2, 1.0) * math.pi);
-            squashX += 0.07 * math.sin(math.min(k * 2, 1.0) * math.pi);
+            squashY -= 0.07 * sq;
+            squashX += 0.07 * sq;
           }
         }
 
-        final mark = Transform.translate(
-          offset: Offset(0, dy),
-          child: Transform.rotate(
-            angle: rot,
-            alignment: Alignment.bottomCenter,
-            child: Transform.scale(
-              scale: scale,
-              alignment: Alignment.bottomCenter,
-              child: Transform(
-                alignment: Alignment.bottomCenter,
-                transform: Matrix4.diagonal3Values(squashX, squashY, 1),
-                child: Image.asset(
-                  PurrseAssets.mark,
-                  width: w,
-                  height: h,
-                  fit: BoxFit.contain,
-                  filterQuality: FilterQuality.high,
-                  semanticLabel: widget.semanticLabel,
-                  excludeFromSemantics: widget.semanticLabel == null,
-                ),
-              ),
-            ),
-          ),
-        );
+        // Satu matriks (translate + rotate + scale) berporos di dasar gambar.
+        final m = Matrix4.identity()
+          ..translate(w / 2, h + dy)
+          ..rotateZ(rot)
+          ..scale(baseScale * squashX, baseScale * squashY, 1.0)
+          ..translate(-w / 2, -h);
+        final mark = Transform(transform: m, child: markChild);
 
         if (!widget.decorations) return mark;
 
-        // --- Kilau jingga: muncul "pop" setelah kucing mendarat, lalu berkedip.
         final popIn = Curves.easeOutBack.transform(((i - 0.45) / 0.45).clamp(0.0, 1.0));
         final twinkle = 0.5 + 0.5 * math.sin(l * 2 + 1.2);
         final burst = t > 0 ? math.sin(math.pi * t) : 0.0;
         final sparkleScale = popIn * (0.85 + 0.25 * twinkle + 0.35 * burst);
         final sparkleTurn = (0.08 * math.sin(l) + 0.6 * burst) * math.pi / 2;
 
-        // --- Garis semangat ungu: getar kecil.
         final dashIn = Curves.easeOut.transform(((i - 0.6) / 0.35).clamp(0.0, 1.0));
         final shake = math.sin(l * 4) * 0.02 * (idleOn ? 1 : 0) + burst * 0.1;
 
         return Stack(
           clipBehavior: Clip.none,
           children: [
-            Positioned(left: 0, top: 0, child: SizedBox(width: w, height: h, child: mark)),
-            // sparkle: x 0.825..1.032 W, y 0.049..0.256 H (dari berkas branding)
+            Positioned(left: 0, top: 0, child: mark),
             Positioned(
               left: w * 0.825,
               top: h * 0.049,
               child: Opacity(
                 opacity: popIn.clamp(0.0, 1.0),
-                child: Transform.rotate(
-                  angle: sparkleTurn,
-                  child: Transform.scale(
-                    scale: sparkleScale,
-                    child: Image.asset(PurrseAssets.sparkle, width: w * 0.207, filterQuality: FilterQuality.high),
-                  ),
+                child: Transform(
+                  alignment: Alignment.center,
+                  transform: Matrix4.identity()
+                    ..rotateZ(sparkleTurn)
+                    ..scale(sparkleScale, sparkleScale, 1.0),
+                  child: sparkleImg,
                 ),
               ),
             ),
             Positioned(
-              left: -w * 0.092,
+              left: -w * 0.092 - w * 0.04 * (1 - dashIn) + w * shake,
               top: h * 0.198,
-              child: Opacity(
-                opacity: dashIn,
-                child: Transform.translate(
-                  offset: Offset(-w * 0.04 * (1 - dashIn) + w * shake, 0),
-                  child: Image.asset(PurrseAssets.dashPurpleA, width: w * 0.114, filterQuality: FilterQuality.high),
-                ),
-              ),
+              child: Opacity(opacity: dashIn, child: dashA),
             ),
             Positioned(
-              left: -w * 0.166,
+              left: -w * 0.166 - w * 0.04 * (1 - dashIn) - w * shake,
               top: h * 0.299,
-              child: Opacity(
-                opacity: dashIn,
-                child: Transform.translate(
-                  offset: Offset(-w * 0.04 * (1 - dashIn) - w * shake, 0),
-                  child: Image.asset(PurrseAssets.dashPurpleB, width: w * 0.141, filterQuality: FilterQuality.high),
-                ),
-              ),
+              child: Opacity(opacity: dashIn, child: dashB),
             ),
           ],
         );
       },
     );
 
-    final sized = SizedBox(width: w, height: h, child: body);
+    // RepaintBoundary: animasi logo tidak ikut memicu repaint halaman.
+    final sized = RepaintBoundary(child: SizedBox(width: w, height: h, child: body));
     if (!widget.tappable) return sized;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -276,7 +269,7 @@ class _PurrseLogoState extends State<PurrseLogo> with SingleTickerProviderStateM
   bool _started = false;
 
   // wordmark.png: 1710 x 475
-  static const double _wordAspect = 475 / 1710;
+  static const double _wordAspect = 211 / 760;
 
   @override
   void initState() {
@@ -330,7 +323,8 @@ class _PurrseLogoState extends State<PurrseLogo> with SingleTickerProviderStateM
           width: wordW,
           height: wordH,
           fit: BoxFit.contain,
-          filterQuality: FilterQuality.high,
+          cacheWidth: (wordW * 3).round(),
+          filterQuality: FilterQuality.medium,
           semanticLabel: 'Purrse',
         ),
       ),

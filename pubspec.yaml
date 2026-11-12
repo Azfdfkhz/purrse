@@ -1,7 +1,7 @@
 name: pursapp
 description: Aplikasi pengatur keuangan pribadi dengan penyimpanan lokal (memori HP).
 publish_to: 'none'
-version: 1.3.0+7
+version: 1.3.0+6
 
 environment:
   sdk: '>=3.0.0 <4.0.0'

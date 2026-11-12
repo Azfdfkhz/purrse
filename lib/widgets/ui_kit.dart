@@ -41,8 +41,8 @@ class _PressableState extends State<Pressable> {
       onTap: widget.onTap,
       child: AnimatedScale(
         scale: _down ? widget.pressedScale : 1,
-        duration: motion(context, _down ? 110 : 380),
-        curve: _down ? Curves.easeOut : Curves.elasticOut,
+        duration: motion(context, _down ? 90 : 220),
+        curve: _down ? Curves.easeOut : Curves.easeOutBack,
         child: widget.child,
       ),
     );
